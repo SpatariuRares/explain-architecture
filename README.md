@@ -49,12 +49,19 @@ A comprehensive report is written to `docs/architecture.md` containing:
 - **End-to-End Request Flow**: Step-by-step trace of a representative action.
 - **Design Patterns & Pain Points**: Practical patterns in use and potential technical debt (tailored for Intermediate/Senior developers).
 
+### 4. Review Mode
+Reports go stale as the code moves on. Ask *"review the architecture report"* (or verify / update `docs/architecture.md`) and the skill follows [`REVIEW.md`](REVIEW.md) instead:
+- **Baseline**: re-reads versions from the manifests and scans migrations newer than the report for dropped tables and removed features.
+- **Parallel verification**: one verifier agent per area of the report, each returning `OK / WRONG / PARTIAL / UNVERIFIABLE` for every factual statement, with `file:line` evidence.
+- **Fix in place**: every wrong or partial statement is corrected, removed entities are purged from the whole report, and the header gets a `Revised` date.
+- **Summary**: the main fixes, what could not be verified, and repository inconsistencies found along the way.
+
 ---
 
 ## 📥 Installation & Usage
 
 ### 1. In AI Assistant / Desktop App
-Simply place or link the `SKILL.md` file into your agent's skills directory:
+Simply place or link the skill folder (`SKILL.md` and `REVIEW.md`) into your agent's skills directory:
 - Custom Agent system instructions.
 - Desktop application configurations.
 

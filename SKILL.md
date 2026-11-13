@@ -1,11 +1,16 @@
 ---
 name: explain-architecture
-description: Analyzes the codebase, explains its architecture tailored to the user's seniority level, and writes a detailed markdown report file. Use when user asks "how does this codebase work", "explain the architecture", "walk me through the code", "explain this project", "generate an architecture report", or wants an overview of the system.
+description: Analyzes the codebase, explains its architecture tailored to the user's seniority level, and writes a detailed markdown report file — or reviews an existing report against the current code and fixes it. Use when user asks "how does this codebase work", "explain the architecture", "walk me through the code", "explain this project", "generate an architecture report", wants an overview of the system, or asks to review, verify, check or update docs/architecture.md.
 ---
 
 # Explain Architecture
 
 ## Workflow
+
+### Step 0 — Pick the mode
+
+- **Review mode**: the user asks to review, verify, check or update an existing architecture report (`docs/architecture.md` or a path they name). Follow [REVIEW.md](REVIEW.md) and skip the steps below.
+- **Create mode**: everything else. Continue with Step 1. If `docs/architecture.md` already exists, ask whether to regenerate it or review it.
 
 ### Step 1 — Ask seniority + subagent preference
 
@@ -48,6 +53,13 @@ Spawn one `Explore` subagent per major module **in parallel**. Each agent must r
 Also spawn a dedicated agent for cross-cutting concerns: auth, Kafka topics, shared base classes, error handling.
 
 Collect all results before proceeding to Step 3.
+
+#### Facts that go stale
+
+Whatever the mode, take these from the source of truth, never from READMEs, `CLAUDE.md` files or memory:
+- versions: the manifests (`package.json` dependencies and `engines`, `.nvmrc`, `pom.xml`, lockfiles);
+- the live schema: replay the migrations, newest last — a recent `DROP TABLE` invalidates whole features;
+- counts (lines, files, routes, tables): count them with a command or script, never estimate.
 
 ---
 
