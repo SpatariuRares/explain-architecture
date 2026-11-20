@@ -1,6 +1,6 @@
 ---
 name: explain-architecture
-description: Analyzes the codebase, explains its architecture tailored to the user's seniority level, and writes a detailed markdown report file — or reviews an existing report against the current code and fixes it. Use when user asks "how does this codebase work", "explain the architecture", "walk me through the code", "explain this project", "generate an architecture report", wants an overview of the system, or asks to review, verify, check or update docs/architecture.md.
+description: Analyzes the codebase, explains its architecture tailored to the user's seniority level, and writes a detailed markdown report file — or reviews an existing report against the current code and fixes it. Use when user asks "how does this codebase work", "explain the architecture", "walk me through the code", "explain this project", "generate an architecture report", wants an overview of the system, or asks to review, verify, check or update docs/architecture.md, or asks for a goldfish review of the architecture report.
 ---
 
 # Explain Architecture
@@ -141,5 +141,7 @@ After writing the file, print a brief summary in chat (not the full report):
 - Modules covered: [list]
 - Key insight: one surprising or non-obvious thing found
 
-End with:
-> "Want me to go deeper on any module, trace a specific flow, or explain a design decision?"
+End with exactly one question, then stop and wait:
+> "Want me to run a goldfish review of this report? Independent reviewers with fresh context will check its facts against the code and judge clarity, structure and conclusions."
+
+If the user accepts, follow [goldfish/PROTOCOL.md](goldfish/PROTOCOL.md). If the user declines, or asks about a module, flow or design decision instead, answer that. Ask no other question.

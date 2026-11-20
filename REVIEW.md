@@ -48,3 +48,7 @@ Report briefly:
 - the most significant fixes, grouped by theme rather than by agent;
 - the UNVERIFIABLE statements left in place;
 - inconsistencies in the repository surfaced along the way (docs citing missing files, dead code), left untouched for the user to decide.
+
+## 5. Offer the goldfish review
+
+The checks above are done by agents that share your instructions and your list of removals. A goldfish review is an independent second look: reviewers with a fresh context and no history re-check the facts against the code, and also judge clarity, structure, writing and the report's conclusions. After the chat summary, ask one question and wait: do you want a goldfish review of the report? If yes, follow [goldfish/PROTOCOL.md](goldfish/PROTOCOL.md).

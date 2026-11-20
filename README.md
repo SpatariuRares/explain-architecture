@@ -56,12 +56,34 @@ Reports go stale as the code moves on. Ask *"review the architecture report"* (o
 - **Fix in place**: every wrong or partial statement is corrected, removed entities are purged from the whole report, and the header gets a `Revised` date.
 - **Summary**: the main fixes, what could not be verified, and repository inconsistencies found along the way.
 
+### 5. Goldfish Review
+After a report is written (or reviewed), the skill offers a **goldfish review**: independent reviewer subagents with a fresh context and no conversation history. Ask *"goldfish review of the architecture report"* at any time to run it.
+- **Six reviewers in parallel**: a fact-checker (claims tested against the code), a naive reader, a zoom-out reviewer, a design critic, a structure reviewer and a style reviewer.
+- **One synthesizer** merges and deduplicates findings (Blocker / Major / Nit, with CONFIRMED / REFUTED-by-code / UNVERIFIABLE verdicts) and writes `<report-name>.review.md` next to the report.
+- **Fixes need your approval**, one decision at a time, with at most one re-audit.
+- Needs a subagent tool; without one the review is not run, because a same-context review is not a goldfish review.
+
+Details: [`goldfish/README.md`](goldfish/README.md) and [`goldfish/PROTOCOL.md`](goldfish/PROTOCOL.md). The personas are derived from the `egm` plugin v0.1.1 (Apache 2.0).
+
+### Folder layout
+```
+explain-architecture/
+  SKILL.md        create mode workflow
+  REVIEW.md       review mode workflow
+  README.md
+  goldfish/
+    README.md     what it is, reviewer table, attribution
+    PROTOCOL.md   how the orchestrator runs a review
+    agents/       zoom-out, comprehension, design-critic, structural, style, codebase-details, synthesizer
+    standards/    zoom-out-standard.md
+```
+
 ---
 
 ## 📥 Installation & Usage
 
 ### 1. In AI Assistant / Desktop App
-Simply place or link the skill folder (`SKILL.md` and `REVIEW.md`) into your agent's skills directory:
+Simply place or link the skill folder (`SKILL.md`, `REVIEW.md` and the `goldfish/` folder) into your agent's skills directory:
 - Custom Agent system instructions.
 - Desktop application configurations.
 
