@@ -1,0 +1,206 @@
+{
+  "meta": {
+    "title": "Parcel lockers: architecture explorer",
+    "subtitle": "A made-up system used as a model dataset",
+    "lang": "en",
+    "generated": "2026-11-20",
+    "source": "docs/architecture.md"
+  },
+  "views": [
+    {
+      "id": "map",
+      "type": "map",
+      "title": "System map",
+      "description": "A courier drops a parcel in a locker, the customer gets a code and collects it. Dashed borders mark components that live outside this repository.",
+      "groups": [
+        { "id": "client", "label": "Clients", "color": "#2f7fd8" },
+        { "id": "core", "label": "Backend", "color": "#2e9d6b" },
+        { "id": "hw", "label": "Hardware", "color": "#c9822b" },
+        { "id": "ext", "label": "Third party", "color": "#8a6bd1" }
+      ],
+      "containers": [
+        { "id": "backend-box", "label": "backend", "x": 250, "y": 10, "w": 230, "h": 330 }
+      ],
+      "nodes": [
+        {
+          "id": "app", "group": "client", "title": "Mobile app", "sub": "customer and courier",
+          "x": 20, "y": 40, "w": 185, "h": 56,
+          "summary": "Lets a customer see the pickup code and a courier register a drop.",
+          "files": ["mobile/src/screens/Pickup.tsx:12"],
+          "notes": ["The code is shown for 10 minutes, then it must be refreshed."],
+          "links": [{ "view": "flow", "id": "s1" }]
+        },
+        {
+          "id": "api", "group": "core", "title": "API gateway", "sub": "checks the token",
+          "x": 270, "y": 40, "w": 185, "h": 56,
+          "summary": "Single entry point. Checks the token and forwards the call to a service.",
+          "files": ["backend/src/gateway/router.ts:30"]
+        },
+        {
+          "id": "orders", "group": "core", "title": "Order service", "sub": "owns the parcel state",
+          "x": 270, "y": 140, "w": 185, "h": 56,
+          "summary": "Creates orders and moves each parcel through its states.",
+          "size": "1,240 lines",
+          "files": ["backend/src/orders/order.service.ts:88", "backend/src/orders/transitions.ts:15"],
+          "extra": [{ "label": "For a rewrite", "text": "Every state change goes through transitions.ts, so that file is the place to start." }],
+          "links": [{ "view": "states" }, { "view": "risks", "id": "r-expiry" }]
+        },
+        {
+          "id": "db", "group": "core", "title": "Database", "sub": "orders and codes",
+          "x": 270, "y": 240, "w": 185, "h": 56,
+          "summary": "Stores orders, pickup codes and an event log."
+        },
+        {
+          "id": "locker", "group": "hw", "title": "Locker unit", "sub": "door and sensor",
+          "x": 540, "y": 140, "w": 185, "h": 56, "external": true,
+          "summary": "Opens a door on request and reports when it is closed with a parcel inside.",
+          "notes": ["The unit keeps a local copy of valid codes so it still works offline."]
+        },
+        {
+          "id": "sms", "group": "ext", "title": "SMS provider", "sub": "sends the code",
+          "x": 540, "y": 40, "w": 185, "h": 56, "external": true,
+          "summary": "Third-party service that texts the pickup code to the customer."
+        }
+      ],
+      "edges": [
+        { "id": "e1", "from": "app", "to": "api", "label": "HTTPS" },
+        { "id": "e2", "from": "api", "to": "orders", "label": "call" },
+        { "id": "e3", "from": "orders", "to": "db", "label": "SQL" },
+        { "id": "e4", "from": "orders", "to": "locker", "label": "open door" },
+        { "id": "e5", "from": "locker", "to": "orders", "label": "door closed" },
+        { "id": "e6", "from": "orders", "to": "sms", "label": "send code" }
+      ],
+      "viewBox": [0, 0, 760, 350]
+    },
+    {
+      "id": "flow",
+      "type": "flow",
+      "title": "Drop and pickup",
+      "description": "From the courier registering a drop to the customer opening the door.",
+      "mapView": "map",
+      "lanes": [
+        { "id": "COURIER", "name": "Courier", "sub": "app", "color": "#2f7fd8" },
+        { "id": "SERVICE", "name": "Backend", "sub": "order service", "color": "#2e9d6b" },
+        { "id": "LOCKER", "name": "Locker", "sub": "hardware", "color": "#c9822b" },
+        { "id": "CUSTOMER", "name": "Customer", "sub": "phone", "color": "#8a6bd1" }
+      ],
+      "steps": [
+        {
+          "id": "s1", "title": "Register the drop", "actors": ["COURIER", "SERVICE"], "status": "CREATED",
+          "text": "The courier scans the parcel in the app. The order service creates the order and picks a free compartment.",
+          "nodeIds": ["app", "api", "orders", "db"],
+          "edgeIds": ["e1", "e2", "e3"],
+          "refs": ["backend/src/orders/order.service.ts:88"],
+          "links": [{ "view": "states", "id": "CREATED" }]
+        },
+        {
+          "id": "s2", "title": "Open the door", "actors": ["SERVICE", "LOCKER"], "status": "CREATED",
+          "text": "The service asks the locker unit to open the chosen door. The courier puts the parcel inside and closes it.",
+          "nodeIds": ["orders", "locker"],
+          "edgeIds": ["e4"]
+        },
+        {
+          "id": "s3", "title": "Confirm storage", "actors": ["LOCKER", "SERVICE"], "status": "STORED",
+          "text": "The door sensor reports the door closed with a parcel inside. The order moves to STORED.",
+          "nodeIds": ["locker", "orders"],
+          "edgeIds": ["e5"],
+          "links": [{ "view": "states", "id": "STORED" }, { "view": "messages", "id": "msg-doorClosed" }]
+        },
+        {
+          "id": "s4", "title": "Send the code", "actors": ["SERVICE", "CUSTOMER"], "status": "NOTIFIED",
+          "text": "The service creates a pickup code and asks the SMS provider to send it. The customer can also read it in the app.",
+          "nodeIds": ["orders", "sms"],
+          "edgeIds": ["e6"],
+          "links": [{ "view": "states", "id": "NOTIFIED" }]
+        }
+      ]
+    },
+    {
+      "id": "states",
+      "type": "states",
+      "title": "Parcel states",
+      "description": "Oversize parcels are released by staff instead of by the customer's code.",
+      "families": ["standard", "oversize"],
+      "states": [
+        { "id": "CREATED", "initial": true, "description": "The order exists and a compartment is reserved." },
+        { "id": "STORED", "description": "The parcel is inside and the door is closed." },
+        { "id": "NOTIFIED", "description": "The customer has the pickup code." },
+        { "id": "PICKED_UP", "terminal": true, "description": "The customer collected the parcel." },
+        { "id": "EXPIRED", "terminal": true, "description": "The code expired before pickup." },
+        { "id": "RETURNED", "terminal": true, "description": "The courier took the parcel back." }
+      ],
+      "transitions": [
+        { "from": null, "to": "CREATED", "by": "createOrder", "families": ["standard", "oversize"] },
+        { "from": "CREATED", "to": "STORED", "by": "doorClosed", "families": ["standard", "oversize"] },
+        { "from": "STORED", "to": "NOTIFIED", "by": "sendCode", "families": ["standard"] },
+        { "from": "STORED", "to": "NOTIFIED", "by": "staffRelease", "families": ["oversize"], "note": "Staff confirm the parcel before the customer is told." },
+        { "from": "NOTIFIED", "to": "PICKED_UP", "by": "enterCode", "families": ["standard", "oversize"] },
+        { "from": "NOTIFIED", "to": "EXPIRED", "by": "timeout", "families": ["standard", "oversize"] },
+        { "from": "*", "to": "RETURNED", "by": "courierRecall", "families": ["standard", "oversize"] }
+      ]
+    },
+    {
+      "id": "messages",
+      "type": "catalog",
+      "title": "Messages",
+      "description": "The messages the locker unit and the service exchange.",
+      "groupBy": "direction",
+      "columns": [
+        { "key": "name", "label": "Name", "mono": true },
+        { "key": "direction", "label": "Direction", "filterable": true },
+        { "key": "effect", "label": "Effect" }
+      ],
+      "rows": [
+        { "id": "msg-openDoor", "name": "openDoor", "direction": "service to locker", "effect": "Opens the chosen door." },
+        { "id": "msg-doorClosed", "name": "doorClosed", "direction": "locker to service", "effect": "Moves the order to STORED.", "links": [{ "view": "flow", "id": "s3" }] },
+        { "id": "msg-codeList", "name": "codeList", "direction": "service to locker", "effect": "Refreshes the local copy of valid codes." },
+        { "id": "msg-doorOpened", "name": "doorOpened", "direction": "locker to service", "effect": "Moves the order to PICKED_UP." }
+      ]
+    },
+    {
+      "id": "size",
+      "type": "metrics",
+      "title": "Size",
+      "series": [
+        {
+          "id": "backend", "title": "Backend", "unit": "lines",
+          "description": "The listed modules are the whole backend, so the total is 3,330 lines.",
+          "items": [
+            { "label": "orders", "value": 1240, "group": "services" },
+            { "label": "gateway", "value": 610, "group": "services" },
+            { "label": "notifications", "value": 480, "group": "services" },
+            { "label": "database access", "value": 1000, "group": "shared" }
+          ]
+        }
+      ],
+      "callouts": [
+        { "title": "Where the weight is", "text": "The order service holds more than a third of the backend, mostly the transition rules." }
+      ],
+      "tables": [
+        {
+          "title": "Tests",
+          "columns": ["Where", "What"],
+          "rows": [["backend", "42 specs, 18 of them for state changes"], ["mobile", "9 specs"]]
+        }
+      ]
+    },
+    {
+      "id": "risks",
+      "type": "notes",
+      "title": "Risks and open points",
+      "description": "Severity is a judgment of the author, not a measured value.",
+      "items": [
+        {
+          "id": "r-expiry", "title": "Codes expire silently", "severity": "med", "status": "verified",
+          "text": "When a code expires the customer is not told, and the parcel stays in the locker until the courier recalls it.",
+          "links": [{ "view": "states", "id": "EXPIRED" }]
+        },
+        {
+          "id": "r-offline", "title": "Offline unit and stale codes", "severity": "low", "status": "unverified",
+          "text": "The unit keeps a local list of valid codes. How often it is refreshed was not checked.",
+          "links": [{ "view": "messages", "id": "msg-codeList" }]
+        }
+      ]
+    }
+  ]
+}

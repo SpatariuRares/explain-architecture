@@ -1,0 +1,1641 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Explorer</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1c2330; --muted: #5f6b7d; --line: #d9dee6;
+    --accent: #2563eb; --accent-soft: #e3ecff; --ok: #2e9d6b; --warn: #c9822b; --bad: #d1495b;
+    --shadow: 0 1px 2px rgba(20,30,50,.08), 0 4px 14px rgba(20,30,50,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #11151c; --panel: #1a212c; --ink: #e6ebf3; --muted: #93a0b4; --line: #2b3545;
+      --accent: #6ea0ff; --accent-soft: #1f2d4a; --ok: #4cc795; --warn: #e8a355; --bad: #ef7586;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.3);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #11151c; --panel: #1a212c; --ink: #e6ebf3; --muted: #93a0b4; --line: #2b3545;
+    --accent: #6ea0ff; --accent-soft: #1f2d4a; --ok: #4cc795; --warn: #e8a355; --bad: #ef7586;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.3);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow-x: hidden; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  code, .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 12.5px; overflow-wrap: break-word; }
+  .muted { color: var(--muted); }
+  .hint { font-size: 12px; color: var(--muted); margin: 4px 0; }
+  h1 { font-size: 20px; margin: 0; }
+  h2 { font-size: 16px; margin: 0 0 8px; }
+  h3 { font-size: 13px; margin: 14px 0 6px; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+  p { margin: 6px 0; }
+  ul { margin: 6px 0; padding-left: 20px; }
+  li { margin: 3px 0; overflow-wrap: anywhere; }
+
+  header { max-width: 1280px; margin: 0 auto; padding: 16px 16px 0; display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+  .sub { color: var(--muted); font-size: 13px; margin-top: 2px; overflow-wrap: anywhere; }
+  .tools { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; }
+  .btn:hover { border-color: var(--accent); }
+  .btn[aria-pressed="true"], .btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  kbd { font: 11px ui-monospace, Consolas, monospace; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; margin-left: 6px; color: var(--muted); }
+  nav { max-width: 1280px; margin: 14px auto 0; padding: 0 16px; display: flex; gap: 6px; flex-wrap: wrap; }
+  nav button { background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; color: var(--muted); }
+  nav button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  main { max-width: 1280px; margin: 14px auto 40px; padding: 0 16px; }
+  section.view { display: none; }
+  section.view.active { display: block; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; box-shadow: var(--shadow); min-width: 0; }
+  .card + .card { margin-top: 14px; }
+  .split { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+  .split > .card + .card { margin-top: 0; }
+  .split.wide { grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr); }
+  .split.mapright { grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); }
+  /* The detail panel stays in view while the user scrolls a tall diagram or table. */
+  .split.wide > :last-child { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; }
+  @media (max-width: 900px) {
+    .split, .split.wide, .split.mapright { grid-template-columns: minmax(0, 1fr); }
+    .split > .card + .card { margin-top: 14px; }
+    .split.wide > :last-child { position: static; max-height: none; }
+  }
+  .chip { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; border: 1px solid var(--line); background: var(--panel); margin: 2px 4px 2px 0; }
+  button.chip { cursor: pointer; }
+  button.chip:hover { border-color: var(--accent); }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip.link { border-color: var(--accent); color: var(--accent); }
+  .chip.sev-high { border-color: var(--bad); color: var(--bad); }
+  .chip.sev-med { border-color: var(--warn); color: var(--warn); }
+  .chip.sev-low { border-color: var(--ok); color: var(--ok); }
+  .chip.on.sev-high, .chip.on.sev-med, .chip.on.sev-low { color: #fff; }
+  .chip.unverified { border-style: dashed; color: var(--warn); border-color: var(--warn); }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  input[type="search"], select { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; }
+  input[type="search"] { width: 100%; }
+  .row-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+  .grow { flex: 1 1 160px; min-width: 0; }
+  .callout { border-left: 4px solid var(--warn); background: var(--accent-soft); padding: 10px 12px; border-radius: 6px; margin: 10px 0; }
+  dl.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; margin: 6px 0; }
+  dl.kv dt { color: var(--muted); } dl.kv dd { margin: 0; overflow-wrap: anywhere; }
+
+  /* SVG viewport shared by map and state graph */
+  .viewport { position: relative; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); overflow: hidden; }
+  /* The inline aspect-ratio (set from the diagram bounds) sizes the height; max-height only caps very tall diagrams. */
+  .viewport svg { display: block; width: 100%; height: auto; min-height: 200px; max-height: min(78vh, 780px); cursor: grab; touch-action: pan-y pinch-zoom; user-select: none; }
+  .viewport.compact svg { max-height: min(54vh, 480px); }
+  .viewport.tall svg { max-height: min(86vh, 880px); }
+  .viewport svg.panning { cursor: grabbing; }
+  .zoombar { position: absolute; top: 8px; right: 8px; display: flex; flex-direction: column; gap: 4px; }
+  .zoombar button { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); line-height: 1; }
+  .tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--bg); border-radius: 6px; padding: 4px 8px; font-size: 12px; max-width: 260px; z-index: 5; display: none; }
+  .node { cursor: pointer; transition: opacity .15s; }
+  .node rect { fill: var(--panel); stroke-width: 1.6; }
+  .node.ext rect { stroke-dasharray: 5 3; }
+  .node text { fill: var(--ink); pointer-events: none; }
+  .node .t { font-size: 12px; font-weight: 600; } .node .s { font-size: 10.5px; fill: var(--muted); }
+  .node.sel rect, .node.hl rect, .node.cur rect { fill: var(--accent-soft); stroke-width: 2.8; }
+  .node.path rect { fill: var(--accent-soft); stroke-width: 2.8; stroke-dasharray: none; }
+  .node.dim, .edge-g.dim, .st.dim { opacity: .26; }
+  .node.flash rect, .st.flash rect { animation: pulse 1.2s ease-out 1; }
+  @keyframes pulse { 0% { stroke-width: 7; } 100% { stroke-width: 1.6; } }
+  .cont { fill: none; stroke: var(--line); stroke-width: 1.2; stroke-dasharray: 2 4; }
+  .cont-label { fill: var(--muted); font-size: 11px; }
+  .edge { fill: none; stroke: var(--muted); stroke-width: 1.3; opacity: .55; }
+  .edge-g.hl .edge, .edge-g.path .edge { stroke: var(--accent); stroke-width: 2.4; opacity: 1; }
+  .elabel { fill: var(--muted); font-size: 10px; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
+  .edge-g.hl .elabel, .edge-g.path .elabel { fill: var(--accent); }
+  .dot { fill: var(--accent); }
+  .st { cursor: pointer; transition: opacity .15s; }
+  .st rect { fill: var(--panel); stroke: var(--muted); stroke-width: 1.4; }
+  .st.initial rect { stroke: var(--ok); stroke-width: 2; }
+  .st.terminal rect { stroke-dasharray: 4 2; }
+  .st text { fill: var(--ink); font: 11px ui-monospace, Consolas, monospace; pointer-events: none; }
+  .st.sel rect, .st.cur rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2.6; }
+  .st .badge { fill: var(--warn); font-size: 10px; font-weight: 700; }
+  .tr { fill: none; stroke: var(--muted); stroke-width: 1.3; opacity: .6; cursor: pointer; }
+  .tr.hl { stroke: var(--accent); stroke-width: 2.4; opacity: 1; }
+  .tr.trail { stroke: var(--ok); stroke-width: 2.6; opacity: 1; }
+  .tr.dim { opacity: .08; }
+
+  .lanes { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; margin: 10px 0; }
+  .lane { border: 2px solid var(--line); border-radius: 10px; padding: 8px 6px; text-align: center; opacity: .4; transition: opacity .15s; min-width: 0; }
+  .lane.on { opacity: 1; box-shadow: var(--shadow); }
+  .lane b { display: block; overflow-wrap: anywhere; }
+  .stepbar { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+  .stepbar button { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); }
+  .stepbar button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td.mono { white-space: nowrap; }
+  th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
+  th button { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-transform: inherit; letter-spacing: inherit; }
+  tbody tr[data-key] { cursor: pointer; }
+  tbody tr[data-key]:hover, tbody tr.sel { background: var(--accent-soft); }
+  tr.groupbar td { background: var(--bg); font-weight: 600; cursor: pointer; }
+  tr.flash, .flashable.flash { animation: flashbg 1.2s ease-out 1; }
+  @keyframes flashbg { 0% { background: var(--accent-soft); outline: 2px solid var(--accent); } 100% { outline: 2px solid transparent; } }
+
+  .barrow { display: grid; grid-template-columns: minmax(120px, 280px) minmax(0, 1fr) 80px; gap: 10px; align-items: center; margin: 5px 0; }
+  @media (max-width: 640px) { .barrow { grid-template-columns: minmax(0, 1fr) 70px; } .barrow .barwrap { grid-column: 1 / -1; order: 3; } }
+  .bar { height: 14px; border-radius: 4px; min-width: 2px; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  details.note { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 8px 0; background: var(--panel); }
+  details.note summary { cursor: pointer; font-weight: 600; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(10,15,25,.5); display: flex; align-items: flex-start; justify-content: center; padding: 10vh 16px 16px; z-index: 50; }
+  .overlay[hidden] { display: none; }
+  .pal { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; width: min(640px, 100%); box-shadow: var(--shadow); padding: 12px; }
+  .pal ul { list-style: none; margin: 8px 0 0; padding: 0; max-height: 50vh; overflow-y: auto; }
+  .pal li { padding: 7px 10px; border-radius: 8px; cursor: pointer; display: flex; gap: 8px; justify-content: space-between; margin: 0; }
+  .pal li[aria-selected="true"] { background: var(--accent-soft); }
+  .pal .kind { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 6px 14px; border-radius: 999px; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 60; }
+  #toast.show { opacity: 1; }
+  @media print {
+    header .tools, nav, .zoombar, .row-tools, .stepbar, .flowctl, #toast, .overlay { display: none !important; }
+    section.view { display: block !important; page-break-after: always; }
+    body { background: #fff; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1 id="app-title"></h1>
+    <div class="sub" id="app-sub"></div>
+  </div>
+  <div class="tools" id="app-tools"></div>
+</header>
+<nav id="tabs" role="tablist"></nav>
+<main id="views"></main>
+<div id="toast" role="status" aria-live="polite"></div>
+<pre id="selftest-result" hidden></pre>
+<script type="application/json" id="data">/*__DATA__*/</script>
+<script>
+(function () {
+  'use strict';
+
+  /* ===================================================================
+   * Data and UI strings
+   * =================================================================== */
+  const DATA = JSON.parse(document.getElementById('data').textContent);
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const REDUCED_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const PALETTE = ['#2f7fd8', '#2e9d6b', '#c9822b', '#8a6bd1', '#d1495b', '#2aa7b8', '#b5599a', '#7a8a3a'];
+
+  // Chrome strings. `meta.lang` picks a dictionary; `data.ui` overrides or adds keys (other languages).
+  const STRINGS = {
+    en: {
+      search: 'Search', searchPlaceholder: 'Search boxes, steps, states, rows, notes...', noResults: 'No results',
+      theme: 'Theme', copyLink: 'Copy link', linkCopied: 'Link copied', copied: 'Copied',
+      detail: 'Details', pickItem: 'Select an item to see its details.', generated: 'Generated', source: 'Source',
+      summary: 'Summary', size: 'Size', files: 'Key files', notes: 'Things to know', connections: 'Connections',
+      external: 'Outside this repository', group: 'Group',
+      zoomIn: 'Zoom in', zoomOut: 'Zoom out', fit: 'Fit to view', mapHint: 'Drag to pan, scroll to zoom, click a box for details.',
+      legend: 'Groups', trace: 'Trace path', traceStop: 'Stop tracing', tracePickFrom: 'Tracing: click the starting box.',
+      tracePickTo: 'Now click the target box.', traceNoPath: 'No path between these two boxes.', traceHops: 'Path ({n} hops)', traceClear: 'Clear path',
+      prev: 'Previous', next: 'Next', play: 'Play', pause: 'Pause', speed: 'Speed', stepOf: 'Step {i} of {n}',
+      status: 'Status after this step', refs: 'Where in the code',
+      states: 'States', family: 'Family', all: 'All', enteredFrom: 'Entered from', leavesTo: 'Leaves to', via: 'via',
+      fromAny: 'From any state', entry: 'Entry point', none: 'none', initialState: 'Initial state', terminalState: 'Terminal state',
+      simulator: 'Simulator', simStart: 'Start state', simCurrent: 'Current state', simNext: 'Possible next steps',
+      simHistory: 'History', simReset: 'Reset', simNone: 'No further transitions: terminal state.',
+      rows: '{n} of {total} rows', filterRows: 'Filter rows', sortedBy: 'Sorted by {col}', copyRow: 'Copy row', expandAll: 'Expand all', collapseAll: 'Collapse all',
+      scaleLinear: 'Linear scale', scaleSqrt: 'Square-root scale', sortValue: 'Sort by value', sortName: 'Sort by name', total: 'Sum of listed items',
+      severity: 'Severity', statusLabel: 'Status', high: 'High', med: 'Medium', low: 'Low', verified: 'Verified', unverified: 'Not verified',
+      noRows: 'No rows match the current filters.', kbdHint: 'Ctrl+K'
+    },
+    it: {
+      search: 'Cerca', searchPlaceholder: 'Cerca blocchi, passi, stati, righe, note...', noResults: 'Nessun risultato',
+      theme: 'Tema', copyLink: 'Copia link', linkCopied: 'Link copiato', copied: 'Copiato',
+      detail: 'Dettagli', pickItem: 'Seleziona un elemento per vedere i dettagli.', generated: 'Generato', source: 'Fonte',
+      summary: 'Sintesi', size: 'Dimensioni', files: 'File principali', notes: 'Da sapere', connections: 'Collegamenti',
+      external: 'Fuori da questo repository', group: 'Gruppo',
+      zoomIn: 'Ingrandisci', zoomOut: 'Riduci', fit: 'Adatta alla vista', mapHint: 'Trascina per spostare, scorri per zoomare, clicca un blocco per i dettagli.',
+      legend: 'Gruppi', trace: 'Traccia percorso', traceStop: 'Interrompi traccia', tracePickFrom: 'Traccia: clicca il blocco di partenza.',
+      tracePickTo: 'Ora clicca il blocco di arrivo.', traceNoPath: 'Nessun percorso tra questi due blocchi.', traceHops: 'Percorso ({n} salti)', traceClear: 'Cancella percorso',
+      prev: 'Indietro', next: 'Avanti', play: 'Avvia', pause: 'Pausa', speed: 'Velocità', stepOf: 'Passo {i} di {n}',
+      status: 'Stato dopo questo passo', refs: 'Dove nel codice',
+      states: 'Stati', family: 'Famiglia', all: 'Tutte', enteredFrom: 'Si entra da', leavesTo: 'Si esce verso', via: 'tramite',
+      fromAny: 'Da qualsiasi stato', entry: 'Punto di ingresso', none: 'nessuno', initialState: 'Stato iniziale', terminalState: 'Stato finale',
+      simulator: 'Simulatore', simStart: 'Stato di partenza', simCurrent: 'Stato corrente', simNext: 'Prossimi passi possibili',
+      simHistory: 'Cronologia', simReset: 'Ricomincia', simNone: 'Nessuna transizione successiva: stato finale.',
+      rows: '{n} righe su {total}', filterRows: 'Filtra le righe', sortedBy: 'Ordinato per {col}', copyRow: 'Copia riga', expandAll: 'Espandi tutto', collapseAll: 'Comprimi tutto',
+      scaleLinear: 'Scala lineare', scaleSqrt: 'Scala radice quadrata', sortValue: 'Ordina per valore', sortName: 'Ordina per nome', total: 'Somma delle voci elencate',
+      severity: 'Gravità', statusLabel: 'Stato', high: 'Alta', med: 'Media', low: 'Bassa', verified: 'Verificato', unverified: 'Non verificato',
+      noRows: 'Nessuna riga corrisponde ai filtri.', kbdHint: 'Ctrl+K'
+    }
+  };
+  const LANG = (DATA.meta && DATA.meta.lang) || 'en';
+  const UI = Object.assign({}, STRINGS.en, STRINGS[LANG] || {}, DATA.ui || {});
+  const tr = (key, vars) => String(UI[key] !== undefined ? UI[key] : key)
+    .replace(/\{(\w+)\}/g, (_, k) => (vars && vars[k] !== undefined ? vars[k] : ''));
+
+  /* ===================================================================
+   * Small helpers: DOM builders, storage, clipboard, geometry
+   * =================================================================== */
+  /** Builds an element; text is always set through text nodes, so data can never inject markup. */
+  function build(node, attrs, kids) {
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (v === undefined || v === null || v === false) continue;
+      if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2), v);
+      else if (k === 'text') node.textContent = v;
+      else node.setAttribute(k, v === true ? '' : v);
+    }
+    for (const kid of kids.flat(Infinity)) {
+      if (kid === undefined || kid === null || kid === false) continue;
+      node.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+    }
+    return node;
+  }
+  const el = (tag, attrs, ...kids) => build(document.createElement(tag), attrs, kids);
+  /** Appends children with the same flattening and null-skipping as `el`; native append() would print arrays as [object ...]. */
+  const put = (parent, ...kids) => build(parent, null, kids);
+  /** Replaces the children of `parent` using `put` semantics. */
+  const fill = (parent, ...kids) => { parent.replaceChildren(); return put(parent, ...kids); };
+  const sv = (tag, attrs, ...kids) => build(document.createElementNS(SVG_NS, tag), attrs, kids);
+  const $ = (sel, root) => (root || document).querySelector(sel);
+  const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+  const cls = (...parts) => parts.filter(Boolean).join(' ');
+
+  const store = {
+    key: (k) => 'cwp:' + ((DATA.meta && DATA.meta.title) || 'page') + ':' + k,
+    get(k) { try { return localStorage.getItem(this.key(k)); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(this.key(k), v); } catch (e) { /* storage may be blocked */ } }
+  };
+
+  let toastTimer = 0;
+  function toast(message) {
+    const t = $('#toast');
+    t.textContent = message;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
+  }
+
+  function copyText(text, message) {
+    const done = () => toast(message || tr('copied'));
+    const legacy = () => {
+      const ta = el('textarea', { style: 'position:fixed;opacity:0' }, text);
+      document.body.append(ta);
+      ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) { /* nothing else to try */ }
+      ta.remove();
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, legacy);
+    else legacy();
+  }
+
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const sleep0 = (fn) => setTimeout(fn, 0);
+
+  /** Wraps text into at most `maxLines` lines of `maxChars` characters, ellipsizing the overflow. */
+  function wrapText(text, maxChars, maxLines) {
+    const fit = (s) => (s.length > maxChars ? s.slice(0, Math.max(1, maxChars - 1)) + '…' : s);
+    const lines = [];
+    let line = '';
+    for (const word of String(text).split(/\s+/).filter(Boolean)) {
+      if (!line) line = word;
+      else if ((line + ' ' + word).length <= maxChars) line += ' ' + word;
+      else { lines.push(line); line = word; }
+    }
+    if (line) lines.push(line);
+    if (lines.length > maxLines) {
+      const kept = lines.slice(0, maxLines);
+      kept[maxLines - 1] = kept[maxLines - 1] + '…';
+      return kept.map(fit);
+    }
+    return lines.map(fit);
+  }
+
+  /** Point where a ray from inside rect `r` (origin `o`, direction `d`) leaves the rect. */
+  function rectExit(o, d, r) {
+    let t = Infinity;
+    if (d.x > 0) t = Math.min(t, (r.x + r.w - o.x) / d.x); else if (d.x < 0) t = Math.min(t, (r.x - o.x) / d.x);
+    if (d.y > 0) t = Math.min(t, (r.y + r.h - o.y) / d.y); else if (d.y < 0) t = Math.min(t, (r.y - o.y) / d.y);
+    if (!Number.isFinite(t) || t < 0) t = 0;
+    return { x: o.x + d.x * t, y: o.y + d.y * t };
+  }
+
+  /** Straight line between two node borders, shifted sideways by `shift` so parallel edges do not overlap. */
+  function edgeGeometry(a, b, shift) {
+    const ca = { x: a.x + a.w / 2, y: a.y + a.h / 2 };
+    const cb = { x: b.x + b.w / 2, y: b.y + b.h / 2 };
+    const dx = cb.x - ca.x, dy = cb.y - ca.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const d = { x: dx / len, y: dy / len };
+    const p = { x: -d.y, y: d.x };
+    const o1 = { x: ca.x + p.x * shift, y: ca.y + p.y * shift };
+    const o2 = { x: cb.x + p.x * shift, y: cb.y + p.y * shift };
+    const p1 = rectExit(o1, d, a);
+    const p2 = rectExit(o2, { x: -d.x, y: -d.y }, b);
+    const gap = 3; // keeps the arrow head clear of the border stroke
+    const end = { x: p2.x - d.x * gap, y: p2.y - d.y * gap };
+    return { d: 'M' + p1.x + ',' + p1.y + ' L' + end.x + ',' + end.y, mid: { x: (p1.x + end.x) / 2, y: (p1.y + end.y) / 2 }, normal: p };
+  }
+
+  /* ===================================================================
+   * Index of every addressable entity (palette search, cross-links, deep links)
+   * =================================================================== */
+  const viewById = new Map(DATA.views.map((v) => [v.id, v]));
+  const keyOf = (view, id) => view + '/' + id;
+  const INDEX = [];
+  const entryByKey = new Map();
+
+  function addEntry(view, id, label, text) {
+    const entry = { key: keyOf(view.id, id), view: view.id, id: String(id), label: String(label), text: String(text || ''), kind: view.title };
+    INDEX.push(entry);
+    entryByKey.set(entry.key, entry);
+  }
+  const rowId = (row, i) => (row.id !== undefined ? String(row.id) : 'row-' + i);
+
+  function buildIndex() {
+    for (const view of DATA.views) {
+      if (view.type === 'map') view.nodes.forEach((n) => addEntry(view, n.id, n.title, [n.sub, n.summary, n.size].join(' ')));
+      else if (view.type === 'flow') view.steps.forEach((s, i) => addEntry(view, s.id, (i + 1) + '. ' + s.title, s.text));
+      else if (view.type === 'states') view.states.forEach((s) => addEntry(view, s.id, s.label || s.id, s.description));
+      else if (view.type === 'catalog') view.rows.forEach((r, i) => addEntry(view, rowId(r, i), String(r[view.columns[0].key] ?? rowId(r, i)), view.columns.map((c) => r[c.key]).join(' ')));
+      else if (view.type === 'metrics') view.series.forEach((s) => addEntry(view, s.id, s.title, s.items.map((i) => i.label).join(' ')));
+      else if (view.type === 'notes') view.items.forEach((n) => addEntry(view, n.id, n.title, n.text));
+    }
+  }
+
+  /** Chips that jump to another view/item; the label comes from the target when it can be resolved. */
+  function linkChips(links) {
+    if (!links || !links.length) return null;
+    return el('div', { class: 'links' }, links.map((l) => {
+      const entry = l.id !== undefined ? entryByKey.get(keyOf(l.view, l.id)) : null;
+      const target = viewById.get(l.view);
+      const label = entry ? entry.label : (target ? target.title : l.view);
+      return el('button', { type: 'button', class: 'chip link', title: target ? target.title : '', onclick: () => navigate(l.view, l.id) },
+        '→ ' + label + (entry && target ? ' · ' + target.title : ''));
+    }));
+  }
+
+  /** Briefly highlights the element carrying `data-key`, scrolling it into view when it is in the page flow. */
+  function flash(key) {
+    const node = $$('[data-key]').find((n) => n.dataset.key === key);
+    if (!node) return;
+    node.classList.remove('flash');
+    void node.getBoundingClientRect(); // restart the CSS animation
+    node.classList.add('flash');
+    if (!(node instanceof SVGElement) && node.scrollIntoView) node.scrollIntoView({ block: 'nearest' });
+    setTimeout(() => node.classList.remove('flash'), 1300);
+  }
+
+  /* ===================================================================
+   * Pan / zoom viewport shared by the map and the state graph
+   * =================================================================== */
+  function attachViewport(svg, wrap, getBounds) {
+    const vp = { x: 0, y: 0, w: 100, h: 100, base: 100, fitted: false, dragged: false };
+    const b0 = getBounds();
+    svg.style.aspectRatio = (b0.w + 48) + ' / ' + (b0.h + 48);
+    const apply = () => svg.setAttribute('viewBox', [vp.x, vp.y, vp.w, vp.h].join(' '));
+
+    // The viewBox always keeps the element's aspect ratio, so screen/SVG conversion is one scale factor.
+    function fit() {
+      const r = svg.getBoundingClientRect();
+      if (!r.width || !r.height) { vp.fitted = false; return false; }
+      const b = getBounds();
+      const pad = 24;
+      let w = b.w + pad * 2, h = b.h + pad * 2;
+      const aspect = r.width / r.height;
+      if (w / h < aspect) w = h * aspect; else h = w / aspect;
+      Object.assign(vp, { w, h, base: w, x: b.x + b.w / 2 - w / 2, y: b.y + b.h / 2 - h / 2, fitted: true });
+      apply();
+      return true;
+    }
+    function zoom(factor, cx, cy) {
+      if (!vp.fitted && !fit()) return;
+      const r = svg.getBoundingClientRect();
+      const px = cx === undefined ? r.left + r.width / 2 : cx;
+      const py = cy === undefined ? r.top + r.height / 2 : cy;
+      const s = vp.w / r.width;
+      const p = { x: vp.x + (px - r.left) * s, y: vp.y + (py - r.top) * s };
+      const nw = clamp(vp.w / factor, vp.base / 8, vp.base * 6);
+      const k = nw / vp.w;
+      vp.x = p.x - (p.x - vp.x) * k;
+      vp.y = p.y - (p.y - vp.y) * k;
+      vp.h *= k;
+      vp.w = nw;
+      apply();
+    }
+
+    let drag = null;
+    svg.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      drag = { x: e.clientX, y: e.clientY, vx: vp.x, vy: vp.y, moved: false, id: e.pointerId };
+    });
+    svg.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (!drag.moved) {
+        if (Math.hypot(dx, dy) < 4) return; // below the threshold it is still a click
+        drag.moved = true;
+        svg.classList.add('panning');
+        try { svg.setPointerCapture(drag.id); } catch (err) { /* capture is optional */ }
+      }
+      const s = vp.w / svg.getBoundingClientRect().width;
+      vp.x = drag.vx - dx * s;
+      vp.y = drag.vy - dy * s;
+      apply();
+    });
+    const endDrag = () => {
+      if (drag && drag.moved) { vp.dragged = true; sleep0(() => { vp.dragged = false; }); }
+      drag = null;
+      svg.classList.remove('panning');
+    };
+    svg.addEventListener('pointerup', endDrag);
+    svg.addEventListener('pointercancel', endDrag);
+    svg.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      zoom(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX, e.clientY);
+    }, { passive: false });
+
+    const bar = el('div', { class: 'zoombar' },
+      el('button', { type: 'button', 'aria-label': tr('zoomIn'), title: tr('zoomIn'), 'data-act': 'zoom-in', onclick: () => zoom(1.3) }, '+'),
+      el('button', { type: 'button', 'aria-label': tr('zoomOut'), title: tr('zoomOut'), 'data-act': 'zoom-out', onclick: () => zoom(1 / 1.3) }, '−'),
+      el('button', { type: 'button', 'aria-label': tr('fit'), title: tr('fit'), 'data-act': 'fit', onclick: () => fit() }, '▣'));
+    wrap.append(bar);
+
+    // Fit as soon as the element has a size (it has none while its tab is hidden) and again on resize.
+    if (window.ResizeObserver) {
+      let lastW = 0;
+      new ResizeObserver(() => {
+        const w = Math.round(svg.getBoundingClientRect().width);
+        if (w && (!vp.fitted || w !== lastW)) { lastW = w; fit(); }
+      }).observe(svg);
+    }
+    return { fit, zoom, vp, isDragging: () => vp.dragged, viewBox: () => svg.getAttribute('viewBox') };
+  }
+
+  /** Floating tooltip inside a positioned wrapper. */
+  function makeTooltip(wrap) {
+    const tip = el('div', { class: 'tip', role: 'tooltip' });
+    wrap.append(tip);
+    return {
+      show(text, evt) {
+        const r = wrap.getBoundingClientRect();
+        tip.textContent = text;
+        tip.style.display = 'block';
+        tip.style.left = clamp(evt.clientX - r.left + 12, 0, Math.max(0, r.width - 180)) + 'px';
+        tip.style.top = (evt.clientY - r.top + 14) + 'px';
+      },
+      hide() { tip.style.display = 'none'; }
+    };
+  }
+
+  /* ===================================================================
+   * Map widget: nodes, auto-routed edges, selection, path trace, animation
+   * =================================================================== */
+  let uid = 0;
+  function createMapWidget(view, opts) {
+    const id = ++uid;
+    const nodes = new Map(view.nodes.map((n) => [n.id, n]));
+    const groups = new Map((view.groups || []).map((g) => [g.id, g]));
+    const edges = view.edges || [];
+    const svg = sv('svg', { 'aria-label': view.title, preserveAspectRatio: 'xMidYMid meet', viewBox: '0 0 100 100' });
+    const wrap = el('div', { class: cls('viewport', opts.compact && 'compact') }, svg);
+    const tooltip = makeTooltip(wrap);
+
+    const marker = (name, color) => sv('marker', { id: name + '-' + id, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto' },
+      sv('path', { d: 'M0,0 L10,5 L0,10 z', fill: color }));
+    svg.append(sv('defs', {}, marker('arr', 'var(--muted)'), marker('arrhl', 'var(--accent)')));
+
+    for (const c of view.containers || []) {
+      svg.append(sv('rect', { class: 'cont', x: c.x, y: c.y, width: c.w, height: c.h, rx: 12 }),
+        sv('text', { class: 'cont-label', x: c.x + 10, y: c.y + 18 }, c.label));
+    }
+
+    // Edges sharing a node pair are spread sideways so opposite directions stay distinguishable.
+    const pairs = new Map();
+    for (const e of edges) {
+      const k = [e.from, e.to].sort().join('|');
+      if (!pairs.has(k)) pairs.set(k, []);
+      pairs.get(k).push(e);
+    }
+    const edgeEls = new Map();
+    const edgeLayer = sv('g', {});
+    for (const e of edges) {
+      const list = pairs.get([e.from, e.to].sort().join('|'));
+      const sign = e.from < e.to ? 1 : -1;
+      const shift = (list.indexOf(e) - (list.length - 1) / 2) * 18 * sign;
+      const geo = edgeGeometry(nodes.get(e.from), nodes.get(e.to), shift);
+      const d = e.path || geo.d;
+      const lx = e.lx !== undefined ? e.lx : geo.mid.x + geo.normal.x * 8;
+      const ly = e.ly !== undefined ? e.ly : geo.mid.y + geo.normal.y * 8 - 2;
+      const path = sv('path', { class: 'edge', d, 'marker-end': 'url(#arr-' + id + ')' });
+      const g = sv('g', { class: 'edge-g', 'data-edge': e.id }, path, e.label ? sv('text', { class: 'elabel', x: lx, y: ly, 'text-anchor': 'middle' }, e.label) : null);
+      edgeLayer.append(g);
+      edgeEls.set(e.id, { g, path, d, edge: e });
+    }
+    svg.append(edgeLayer);
+
+    const nodeEls = new Map();
+    const nodeLayer = sv('g', {});
+    for (const n of view.nodes) {
+      const color = (groups.get(n.group) || {}).color || 'var(--muted)';
+      const maxChars = Math.max(6, Math.floor((n.w - 18) / 6.6));
+      const lines = Math.max(1, Math.floor((n.h - 12) / 14));
+      const titleLines = wrapText(n.title, maxChars, Math.min(2, lines));
+      const subLines = n.sub ? wrapText(n.sub, Math.floor((n.w - 18) / 6), Math.max(0, Math.min(2, lines - titleLines.length))) : [];
+      const rect = sv('rect', { x: n.x, y: n.y, width: n.w, height: n.h, rx: 9 });
+      rect.style.stroke = color;
+      const g = sv('g', { class: cls('node', n.external && 'ext'), 'data-id': n.id, 'data-key': keyOf(view.id, n.id), tabindex: 0, role: 'button', 'aria-label': n.title },
+        sv('title', {}, n.title + (n.sub ? ' — ' + n.sub : '')), rect,
+        titleLines.map((t, i) => sv('text', { class: 't', x: n.x + 10, y: n.y + 20 + i * 14 }, t)),
+        subLines.map((t, i) => sv('text', { class: 's', x: n.x + 10, y: n.y + 20 + titleLines.length * 14 + 2 + i * 12.5 }, t)));
+      g.addEventListener('click', () => { if (!viewport.isDragging()) opts.onNodeClick(n.id); });
+      g.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); opts.onNodeClick(n.id); } });
+      g.addEventListener('pointerenter', (ev) => tooltip.show(n.title + (n.sub ? ' — ' + n.sub : ''), ev));
+      g.addEventListener('pointerleave', () => tooltip.hide());
+      nodeLayer.append(g);
+      nodeEls.set(n.id, g);
+    }
+    svg.append(nodeLayer);
+    const dotLayer = sv('g', {});
+    svg.append(dotLayer);
+
+    const viewport = attachViewport(svg, wrap, () => {
+      if (Array.isArray(view.viewBox) && view.viewBox.length === 4) return { x: view.viewBox[0], y: view.viewBox[1], w: view.viewBox[2], h: view.viewBox[3] };
+      const all = [...view.nodes, ...(view.containers || [])];
+      const x0 = Math.min(...all.map((n) => n.x)), y0 = Math.min(...all.map((n) => n.y));
+      return { x: x0, y: y0, w: Math.max(...all.map((n) => n.x + n.w)) - x0, h: Math.max(...all.map((n) => n.y + n.h)) - y0 };
+    });
+
+    /* ---- adjacency and shortest path (edges are treated as undirected, direction is reported) ---- */
+    const neighbours = (nodeId) => {
+      const out = [];
+      for (const e of edges) {
+        if (e.from === nodeId) out.push({ node: e.to, edge: e, forward: true });
+        else if (e.to === nodeId) out.push({ node: e.from, edge: e, forward: false });
+      }
+      return out;
+    };
+    function findPath(from, to) {
+      if (!nodes.has(from) || !nodes.has(to)) return null;
+      const prev = new Map([[from, null]]);
+      const queue = [from];
+      while (queue.length && !prev.has(to)) {
+        const cur = queue.shift();
+        for (const adj of neighbours(cur)) {
+          if (prev.has(adj.node)) continue;
+          prev.set(adj.node, { from: cur, edge: adj.edge, forward: adj.forward });
+          queue.push(adj.node);
+        }
+      }
+      if (!prev.has(to)) return null;
+      const hops = [];
+      for (let cur = to; prev.get(cur); cur = prev.get(cur).from) hops.unshift({ from: prev.get(cur).from, to: cur, edge: prev.get(cur).edge, forward: prev.get(cur).forward });
+      return { nodes: [from, ...hops.map((h) => h.to)], hops };
+    }
+
+    /* ---- painting: one function derives every class from the current state ---- */
+    const st = { selected: null, highlight: null, path: null, hidden: new Set() };
+    function paint() {
+      const sel = st.selected;
+      const near = new Set(sel ? [sel, ...neighbours(sel).map((a) => a.node)] : []);
+      const hl = st.highlight, pathState = st.path;
+      for (const [nid, g] of nodeEls) {
+        const hidden = st.hidden.has(nodes.get(nid).group);
+        g.style.display = hidden ? 'none' : '';
+        const onPath = pathState && pathState.nodes.includes(nid);
+        const inHl = hl && hl.nodeIds.has(nid);
+        let dim = false;
+        if (pathState) dim = !onPath; else if (hl) dim = !inHl; else if (sel) dim = !near.has(nid);
+        g.classList.toggle('sel', !pathState && !hl && nid === sel);
+        g.classList.toggle('path', !!onPath);
+        g.classList.toggle('hl', !!inHl && !pathState);
+        g.classList.toggle('dim', dim);
+      }
+      for (const [eid, rec] of edgeEls) {
+        const e = rec.edge;
+        const hidden = st.hidden.has(nodes.get(e.from).group) || st.hidden.has(nodes.get(e.to).group);
+        rec.g.style.display = hidden ? 'none' : '';
+        const onPath = pathState && pathState.edgeIds.has(eid);
+        const inHl = hl && hl.edgeIds.has(eid);
+        const touchesSel = sel && (e.from === sel || e.to === sel);
+        let dim = false, lit = false;
+        if (pathState) { lit = onPath; dim = !onPath; } else if (hl) { lit = inHl; dim = !inHl; } else if (sel) { lit = touchesSel; dim = !touchesSel; }
+        rec.g.classList.toggle('hl', lit && !pathState);
+        rec.g.classList.toggle('path', !!lit && !!pathState);
+        rec.g.classList.toggle('dim', dim);
+        rec.path.setAttribute('marker-end', 'url(#' + (lit ? 'arrhl' : 'arr') + '-' + id + ')');
+      }
+    }
+
+    function animate(edgeIds) {
+      dotLayer.replaceChildren();
+      if (REDUCED_MOTION) return; // the highlight alone carries the meaning
+      for (const eid of edgeIds || []) {
+        const rec = edgeEls.get(eid);
+        if (!rec) continue;
+        dotLayer.append(sv('circle', { class: 'dot', r: 4.5 },
+          sv('animateMotion', { dur: '1.8s', repeatCount: 'indefinite', path: rec.d })));
+      }
+    }
+
+    return {
+      root: wrap, svg, viewport, findPath, neighbours, nodes, groups, edgeEls, nodeEls,
+      setSelected(nodeId) { st.selected = nodeId; paint(); },
+      setHighlight(h) { st.highlight = h ? { nodeIds: new Set(h.nodeIds || []), edgeIds: new Set(h.edgeIds || []) } : null; paint(); },
+      setPath(p) { st.path = p ? { nodes: p.nodes, edgeIds: new Set(p.hops.map((x) => x.edge.id)) } : null; paint(); },
+      toggleGroup(groupId) { if (st.hidden.has(groupId)) st.hidden.delete(groupId); else st.hidden.add(groupId); paint(); return !st.hidden.has(groupId); },
+      isHidden: (groupId) => st.hidden.has(groupId),
+      animate, fit: viewport.fit, paint
+    };
+  }
+
+  /* ===================================================================
+   * Shared detail-panel pieces
+   * =================================================================== */
+  const listOf = (items, mono) => (items && items.length ? el('ul', {}, items.map((x) => el('li', { class: mono ? 'mono' : '' }, x))) : null);
+  const section = (title, body) => (body ? [el('h3', {}, title), body] : null);
+
+  function copyLinkButton(viewId, itemId) {
+    return el('button', { type: 'button', class: 'btn', 'data-act': 'copy-link', onclick: () => { setHash(viewId, itemId); copyText(location.href, tr('linkCopied')); } }, tr('copyLink'));
+  }
+
+  /* ===================================================================
+   * View: map
+   * =================================================================== */
+  function renderMapView(view, root) {
+    const detail = el('div', { class: 'card', 'aria-live': 'polite' });
+    const traceBox = el('div', { class: 'trace' });
+    const trace = { on: false, from: null, to: null };
+    let selected = null;
+
+    const widget = createMapWidget(view, { onNodeClick: (nid) => (trace.on ? traceClick(nid) : select(nid, { user: true })) });
+    const traceBtn = el('button', { type: 'button', class: 'btn', 'aria-pressed': 'false', 'data-act': 'trace', onclick: () => setTrace(!trace.on) }, tr('trace'));
+    const legend = (view.groups || []).map((g, i) => {
+      const chip = el('button', { type: 'button', class: 'chip on', 'data-group': g.id, 'aria-pressed': 'true', onclick: () => {
+        const visible = widget.toggleGroup(g.id);
+        chip.classList.toggle('on', visible);
+        chip.setAttribute('aria-pressed', String(visible));
+        if (!visible && selected && widget.nodes.get(selected).group === g.id) select(null);
+      } }, el('span', { class: 'swatch', style: 'background:' + (g.color || PALETTE[i % PALETTE.length]) }), g.label);
+      return chip;
+    });
+
+    root.append(el('div', { class: 'split wide' },
+      el('div', { class: 'card' },
+        el('h2', {}, view.title), view.description ? el('p', { class: 'muted' }, view.description) : null,
+        el('div', { class: 'row-tools' }, traceBtn, legend.length ? el('span', { class: 'muted' }, tr('legend') + ':') : null, legend),
+        widget.root, el('p', { class: 'hint' }, tr('mapHint')), traceBox),
+      detail));
+
+    function setTrace(on) {
+      trace.on = on; trace.from = null; trace.to = null;
+      traceBtn.setAttribute('aria-pressed', String(on));
+      traceBtn.textContent = on ? tr('traceStop') : tr('trace');
+      widget.setPath(null);
+      drawTrace();
+    }
+    function traceClick(nid) {
+      if (!trace.from || trace.to) { trace.from = nid; trace.to = null; widget.setPath(null); }
+      else trace.to = nid;
+      if (trace.to) widget.setPath(widget.findPath(trace.from, trace.to));
+      drawTrace();
+    }
+    function drawTrace() {
+      traceBox.replaceChildren();
+      if (!trace.on) return;
+      if (!trace.from) return traceBox.append(el('p', { class: 'callout', 'data-trace': 'pick-from' }, tr('tracePickFrom')));
+      if (!trace.to) return traceBox.append(el('p', { class: 'callout', 'data-trace': 'pick-to' }, tr('tracePickTo')));
+      const path = widget.findPath(trace.from, trace.to);
+      if (!path) return traceBox.append(el('p', { class: 'callout', 'data-trace': 'none' }, tr('traceNoPath')));
+      const title = (nid) => widget.nodes.get(nid).title;
+      traceBox.append(el('div', { class: 'callout', 'data-trace': 'result' },
+        el('b', {}, tr('traceHops', { n: path.hops.length })),
+        el('ol', {}, el('li', {}, title(path.nodes[0])),
+          path.hops.map((h) => el('li', {}, (h.forward ? '→ ' : '← ') + title(h.to) + (h.edge.label ? '  (' + h.edge.label + ')' : '')))),
+        el('button', { type: 'button', class: 'btn', onclick: () => setTrace(true) }, tr('traceClear'))));
+    }
+
+    function drawDetail(nid) {
+      detail.replaceChildren();
+      if (!nid) return put(detail, el('h2', {}, tr('detail')), el('p', { class: 'muted' }, tr('pickItem')));
+      const n = widget.nodes.get(nid);
+      const g = widget.groups.get(n.group);
+      const conns = widget.neighbours(nid);
+      put(detail, 
+        el('h2', {}, n.title, ' ', g ? el('span', { class: 'chip' }, g.label) : null, n.external ? el('span', { class: 'chip unverified' }, tr('external')) : null),
+        n.sub ? el('p', { class: 'muted' }, n.sub) : null,
+        n.summary ? el('p', {}, n.summary) : null,
+        section(tr('size'), n.size ? el('p', {}, n.size) : null),
+        section(tr('files'), listOf(n.files, true)),
+        section(tr('notes'), listOf(n.notes)),
+        (n.extra || []).map((x) => [el('h3', {}, x.label), el('p', {}, x.text)]),
+        section(tr('connections'), conns.length ? el('ul', {}, conns.map((a) => el('li', {},
+          el('button', { type: 'button', class: 'chip link', onclick: () => select(a.node, { user: true }) }, (a.forward ? '→ ' : '← ') + widget.nodes.get(a.node).title),
+          a.edge.label ? el('span', { class: 'muted' }, ' ' + a.edge.label) : null))) : null),
+        linkChips(n.links), el('p', {}, copyLinkButton(view.id, nid)));
+    }
+
+    function select(nid, opts) {
+      selected = nid;
+      widget.setSelected(nid);
+      drawDetail(nid);
+      // The default selection at boot must not rewrite the URL: it would clobber an incoming deep link.
+      if (nid && !(opts && opts.silent)) setHash(view.id, nid);
+    }
+    select(null, { silent: true });
+
+    return {
+      onShow: widget.fit,
+      select: (nid) => { if (widget.nodes.has(nid)) { if (trace.on) setTrace(false); select(nid); } },
+      widget, setTrace, traceClick
+    };
+  }
+
+  /* ===================================================================
+   * View: flow
+   * =================================================================== */
+  function renderFlowView(view, root) {
+    const steps = view.steps;
+    const mapView = view.mapView ? viewById.get(view.mapView) : null;
+    let idx = 0, timer = 0, speed = 1;
+    const widget = mapView ? createMapWidget(mapView, { compact: true, onNodeClick: (nid) => navigate(mapView.id, nid) }) : null;
+
+    const lanes = (view.lanes || []).map((l, i) => el('div', { class: 'lane', 'data-lane': l.id, style: 'border-color:' + (l.color || PALETTE[i % PALETTE.length]) },
+      el('b', {}, l.name || l.id), l.sub ? el('span', { class: 'muted' }, l.sub) : null));
+    const chips = steps.map((s, i) => el('button', { type: 'button', 'data-i': i, 'aria-label': s.title, title: s.title, onclick: () => go(i) }, String(i + 1)));
+    const counter = el('span', { class: 'muted', 'data-role': 'counter' });
+    const playBtn = el('button', { type: 'button', class: 'btn', 'data-act': 'play', 'aria-pressed': 'false', onclick: () => (timer ? pause() : play()) }, tr('play'));
+    const speedSel = el('select', { 'aria-label': tr('speed'), onchange: (e) => { speed = Number(e.target.value); if (timer) { pause(); play(); } } },
+      [0.5, 1, 2].map((v) => el('option', { value: v, selected: v === 1 }, v + 'x')));
+    const body = el('div', { class: 'flashable' });
+
+    const left = el('div', { class: 'card' },
+      el('h2', {}, view.title), view.description ? el('p', { class: 'muted' }, view.description) : null,
+      lanes.length ? el('div', { class: 'lanes' }, lanes) : null,
+      el('div', { class: 'row-tools flowctl' },
+        el('button', { type: 'button', class: 'btn', 'data-act': 'prev', onclick: () => go(idx - 1) }, '← ' + tr('prev')),
+        playBtn,
+        el('button', { type: 'button', class: 'btn', 'data-act': 'next', onclick: () => go(idx + 1) }, tr('next') + ' →'),
+        el('label', { class: 'muted' }, tr('speed') + ' ', speedSel), counter),
+      el('div', { class: 'stepbar' }, chips), body);
+    root.append(widget ? el('div', { class: 'split mapright' }, left, el('div', { class: 'card' }, widget.root)) : left);
+
+    function go(i, opts) {
+      idx = clamp(i, 0, steps.length - 1);
+      const s = steps[idx];
+      chips.forEach((c, k) => c.classList.toggle('on', k === idx));
+      $$('.lane', left).forEach((l) => l.classList.toggle('on', (s.actors || []).includes(l.dataset.lane)));
+      counter.textContent = tr('stepOf', { i: idx + 1, n: steps.length });
+      body.dataset.key = keyOf(view.id, s.id);
+      fill(body,
+        el('h3', { 'data-role': 'step-title' }, (idx + 1) + '. ' + s.title),
+        s.status ? el('p', {}, tr('status') + ': ', el('span', { class: 'chip on' }, s.status)) : null,
+        el('p', {}, s.text),
+        section(tr('refs'), listOf(s.refs, true)),
+        linkChips(s.links));
+      if (widget) {
+        const hasHighlight = (s.edgeIds && s.edgeIds.length) || (s.nodeIds && s.nodeIds.length);
+        widget.setHighlight(hasHighlight ? { nodeIds: s.nodeIds, edgeIds: s.edgeIds } : null);
+        widget.animate(s.edgeIds);
+      }
+      if (!(opts && opts.quiet)) setHash(view.id, s.id);
+    }
+    function play() {
+      if (idx >= steps.length - 1) go(0);
+      playBtn.setAttribute('aria-pressed', 'true');
+      playBtn.textContent = tr('pause');
+      timer = setInterval(() => { if (idx >= steps.length - 1) pause(); else go(idx + 1); }, 3500 / speed);
+    }
+    function pause() {
+      clearInterval(timer);
+      timer = 0;
+      playBtn.setAttribute('aria-pressed', 'false');
+      playBtn.textContent = tr('play');
+    }
+    go(0, { quiet: true });
+
+    return {
+      onShow() { if (widget) widget.fit(); },
+      select(stepId) { const i = steps.findIndex((s) => s.id === stepId); if (i >= 0) { pause(); go(i); } },
+      step: (d) => go(idx + d), go, play, pause, isPlaying: () => !!timer, current: () => idx, widget
+    };
+  }
+
+  /* ===================================================================
+   * View: states (layered SVG graph + simulator)
+   * =================================================================== */
+  const NODE_H = 34, V_GAP = 56, H_GAP = 26;
+
+  /** Assigns every state a layer (BFS depth from the initial states) and an order inside the layer. */
+  function layoutStates(view) {
+    const ids = view.states.map((s) => s.id);
+    const forward = new Map(ids.map((i) => [i, []]));
+    const hasIncoming = new Set();
+    for (const t of view.transitions || []) {
+      if (t.from && t.from !== '*' && forward.has(t.from) && t.from !== t.to) { forward.get(t.from).push(t.to); hasIncoming.add(t.to); }
+    }
+    let roots = view.states.filter((s) => s.initial).map((s) => s.id);
+    if (!roots.length) roots = ids.filter((i) => !hasIncoming.has(i));
+    if (!roots.length && ids.length) roots = [ids[0]];
+
+    const layer = new Map(roots.map((r) => [r, 0]));
+    const queue = [...roots];
+    while (queue.length) {
+      const cur = queue.shift();
+      for (const nxt of forward.get(cur)) {
+        if (!layer.has(nxt)) { layer.set(nxt, layer.get(cur) + 1); queue.push(nxt); }
+      }
+    }
+    // Unreachable states (or ones only reached through the wildcard) get their own last layer.
+    const extra = Math.max(-1, ...layer.values()) + 1;
+    for (const i of ids) if (!layer.has(i)) layer.set(i, extra);
+
+    const rows = [];
+    for (const i of ids) (rows[layer.get(i)] = rows[layer.get(i)] || []).push(i);
+    const dense = rows.map((r) => r || []);
+    // Two barycenter sweeps pull each state under its parents, which removes most crossings.
+    const pos = new Map();
+    const index = () => dense.forEach((r) => r.forEach((id, k) => pos.set(id, k)));
+    index();
+    for (let pass = 0; pass < 2; pass++) {
+      for (let l = 1; l < dense.length; l++) {
+        const bary = (id) => {
+          const parents = ids.filter((p) => layer.get(p) === l - 1 && forward.get(p).includes(id));
+          return parents.length ? parents.reduce((a, p) => a + pos.get(p), 0) / parents.length : pos.get(id);
+        };
+        dense[l].sort((a, b) => bary(a) - bary(b));
+        index();
+      }
+    }
+    return { layer, rows: dense };
+  }
+
+  function renderStatesView(view, root) {
+    const families = view.families || [];
+    const stateById = new Map(view.states.map((s) => [s.id, s]));
+    const transitions = (view.transitions || []).map((t, i) => Object.assign({ i }, t));
+    const maxLabel = Math.max(...view.states.map((s) => (s.label || s.id).length));
+    const nodeW = clamp(maxLabel * 6.9 + 30, 120, 280);
+    const { layer, rows } = layoutStates(view);
+    const widest = Math.max(...rows.map((r) => r.length), 1);
+    const totalW = widest * nodeW + (widest - 1) * H_GAP;
+    const box = new Map();
+    rows.forEach((r, l) => {
+      const rowW = r.length * nodeW + (r.length - 1) * H_GAP;
+      r.forEach((id, k) => box.set(id, { x: 30 + (totalW - rowW) / 2 + k * (nodeW + H_GAP), y: 30 + l * (NODE_H + V_GAP), w: nodeW, h: NODE_H }));
+    });
+    const bounds = { x: 0, y: 0, w: totalW + 60, h: rows.length * (NODE_H + V_GAP) + 20 };
+
+    const svg = sv('svg', { 'aria-label': view.title, preserveAspectRatio: 'xMidYMid meet', viewBox: '0 0 100 100' });
+    const wrap = el('div', { class: 'viewport tall' }, svg);
+    const tooltip = makeTooltip(wrap);
+    const mk = (name, color) => sv('marker', { id: name + '-' + view.id, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto' }, sv('path', { d: 'M0,0 L10,5 L0,10 z', fill: color }));
+    svg.append(sv('defs', {}, mk('sarr', 'var(--muted)'), mk('sarrhl', 'var(--accent)'), mk('sarrtrail', 'var(--ok)')));
+    const viewport = attachViewport(svg, wrap, () => bounds);
+
+    // One curve per transition between two concrete states. `*` and entry transitions are shown as badges instead.
+    const pairCount = new Map();
+    const trEls = [];
+    const edgeLayer = sv('g', {});
+    for (const t of transitions) {
+      if (!t.from || t.from === '*' || t.from === t.to) continue;
+      const a = box.get(t.from), b = box.get(t.to);
+      const k = t.from + '>' + t.to;
+      const n = pairCount.get(k) || 0;
+      pairCount.set(k, n + 1);
+      let d;
+      if (layer.get(t.to) > layer.get(t.from)) {
+        const sx = a.x + a.w / 2 + n * 16, sy = a.y + a.h, tx = b.x + b.w / 2 + n * 16, ty = b.y, dy = Math.max(18, (ty - sy) / 2);
+        d = 'M' + sx + ',' + sy + ' C' + sx + ',' + (sy + dy) + ' ' + tx + ',' + (ty - dy) + ' ' + tx + ',' + ty;
+      } else if (layer.get(t.to) === layer.get(t.from)) {
+        const sx = a.x + a.w / 2, tx = b.x + b.w / 2, top = a.y - 26 - n * 8;
+        d = 'M' + sx + ',' + a.y + ' C' + sx + ',' + top + ' ' + tx + ',' + top + ' ' + tx + ',' + (b.y - 2);
+      } else {
+        const bulge = 50 + n * 14 + Math.abs(layer.get(t.from) - layer.get(t.to)) * 6;
+        const sx = a.x + a.w, sy = a.y + a.h / 2, tx = b.x + b.w, ty = b.y + b.h / 2;
+        d = 'M' + sx + ',' + sy + ' C' + (sx + bulge) + ',' + sy + ' ' + (tx + bulge) + ',' + ty + ' ' + (tx + 2) + ',' + ty;
+      }
+      const label = t.from + ' → ' + t.to + ': ' + t.by;
+      const path = sv('path', { class: 'tr', d, 'marker-end': 'url(#sarr-' + view.id + ')', 'data-from': t.from, 'data-to': t.to }, sv('title', {}, label));
+      path.addEventListener('pointerenter', (ev) => tooltip.show(label, ev));
+      path.addEventListener('pointerleave', () => tooltip.hide());
+      edgeLayer.append(path);
+      trEls.push({ t, path });
+    }
+    svg.append(edgeLayer);
+
+    const stEls = new Map();
+    const nodeLayer = sv('g', {});
+    for (const s of view.states) {
+      const b = box.get(s.id);
+      const anyIn = transitions.some((t) => t.from === '*' && t.to === s.id);
+      const entryIn = transitions.some((t) => (t.from === null || t.from === undefined) && t.to === s.id);
+      const g = sv('g', { class: cls('st', s.initial && 'initial', s.terminal && 'terminal'), 'data-id': s.id, 'data-key': keyOf(view.id, s.id), tabindex: 0, role: 'button', 'aria-label': s.label || s.id },
+        sv('title', {}, (s.label || s.id) + (s.description ? ' — ' + s.description : '')),
+        sv('rect', { x: b.x, y: b.y, width: b.w, height: b.h, rx: 8 }),
+        sv('text', { x: b.x + 10, y: b.y + b.h / 2 + 4 }, s.label || s.id),
+        anyIn ? sv('text', { class: 'badge', x: b.x + b.w - 8, y: b.y + 12, 'text-anchor': 'end' }, '*') : null,
+        entryIn ? sv('text', { class: 'badge', x: b.x + 8, y: b.y - 4 }, '▶') : null);
+      g.addEventListener('click', () => { if (!viewport.isDragging()) select(s.id); });
+      g.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); select(s.id); } });
+      nodeLayer.append(g);
+      stEls.set(s.id, g);
+    }
+    svg.append(nodeLayer);
+
+    /* ---- state: family filter, selection, simulator ---- */
+    const st = { family: null, selected: null, sim: { start: null, cur: null, trail: [] } };
+    const matches = (t) => !st.family || !(t.families && t.families.length) || t.families.includes(st.family);
+    const detail = el('div', { class: 'card', 'aria-live': 'polite' });
+    const simBox = el('div', { class: 'card' });
+
+    function paint() {
+      const touched = new Set();
+      transitions.filter(matches).forEach((t) => { if (t.from) touched.add(t.from); touched.add(t.to); });
+      const trailEdges = new Set();
+      const trail = st.sim.trail;
+      for (let k = 1; k < trail.length; k++) trailEdges.add(trail[k - 1].state + '>' + trail[k].state);
+      for (const { t, path } of trEls) {
+        const lit = st.selected && (t.from === st.selected || t.to === st.selected);
+        const onTrail = trailEdges.has(t.from + '>' + t.to);
+        path.classList.toggle('hl', !!lit && !onTrail);
+        path.classList.toggle('trail', onTrail);
+        path.classList.toggle('dim', !matches(t) || (!!st.selected && !lit && !onTrail));
+        path.setAttribute('marker-end', 'url(#' + (onTrail ? 'sarrtrail' : lit ? 'sarrhl' : 'sarr') + '-' + view.id + ')');
+      }
+      for (const [sid, g] of stEls) {
+        g.classList.toggle('sel', sid === st.selected);
+        g.classList.toggle('cur', sid === st.sim.cur);
+        g.classList.toggle('dim', !!st.family && !touched.has(sid));
+      }
+    }
+
+    function drawDetail() {
+      detail.replaceChildren();
+      const sid = st.selected;
+      if (!sid) return put(detail, el('h2', {}, tr('detail')), el('p', { class: 'muted' }, tr('pickItem')));
+      const s = stateById.get(sid);
+      const incoming = transitions.filter((t) => t.to === sid && matches(t));
+      const outgoing = transitions.filter((t) => (t.from === sid || t.from === '*') && matches(t));
+      const stateLink = (id) => (stateById.has(id)
+        ? el('button', { type: 'button', class: 'chip link', onclick: () => select(id) }, id)
+        : el('span', { class: 'chip' }, id === '*' ? tr('fromAny') : id === null ? tr('entry') : String(id)));
+      const rowsOf = (list, dir) => (list.length ? el('ul', {}, list.map((t) => el('li', {},
+        dir === 'in' ? stateLink(t.from === undefined ? null : t.from) : stateLink(t.to), ' ',
+        el('span', { class: 'muted' }, tr('via') + ' '), t.by,
+        (t.families || []).map((f) => el('span', { class: 'chip' }, f)),
+        t.note ? el('div', { class: 'muted' }, t.note) : null))) : el('p', { class: 'muted' }, tr('none')));
+      put(detail, el('h2', {}, s.label || s.id),
+        s.initial ? el('span', { class: 'chip on' }, tr('initialState')) : null, s.terminal ? el('span', { class: 'chip' }, tr('terminalState')) : null,
+        s.group ? el('span', { class: 'chip' }, s.group) : null,
+        s.description ? el('p', {}, s.description) : null,
+        el('h3', {}, tr('enteredFrom')), rowsOf(incoming, 'in'),
+        el('h3', {}, tr('leavesTo')), rowsOf(outgoing, 'out'),
+        linkChips(s.links), el('p', {}, copyLinkButton(view.id, sid)));
+    }
+
+    /* Simulator: walk the machine by choosing among the transitions allowed from the current state. */
+    function allowedFrom(cur) { return transitions.filter((t) => t.from && (t.from === cur || t.from === '*') && matches(t)); }
+    function simReset(start) {
+      st.sim.start = start;
+      st.sim.cur = start;
+      st.sim.trail = [{ state: start, by: null }];
+      drawSim();
+      paint();
+    }
+    function simTake(t) {
+      st.sim.cur = t.to;
+      st.sim.trail.push({ state: t.to, by: t.by });
+      drawSim();
+      paint();
+    }
+    function drawSim() {
+      const startSel = el('select', { 'aria-label': tr('simStart'), 'data-role': 'sim-start', onchange: (e) => simReset(e.target.value) },
+        view.states.map((s) => el('option', { value: s.id, selected: s.id === st.sim.start }, s.label || s.id)));
+      const next = allowedFrom(st.sim.cur);
+      fill(simBox, el('h2', {}, tr('simulator')),
+        el('div', { class: 'row-tools' }, el('label', {}, tr('simStart') + ' ', startSel),
+          el('button', { type: 'button', class: 'btn', 'data-act': 'sim-reset', onclick: () => simReset(st.sim.start) }, tr('simReset'))),
+        el('p', {}, tr('simCurrent') + ': ', el('span', { class: 'chip on', 'data-role': 'sim-current' }, st.sim.cur)),
+        el('h3', {}, tr('simNext')),
+        next.length ? el('div', { 'data-role': 'sim-next' }, next.map((t) => el('button', { type: 'button', class: 'chip link', 'data-act': 'sim-take', onclick: () => simTake(t) }, '→ ' + t.to + ' · ' + t.by)))
+          : el('p', { class: 'muted' }, tr('simNone')),
+        el('h3', {}, tr('simHistory')),
+        el('p', { 'data-role': 'sim-trail' }, st.sim.trail.map((h, i) => [i ? el('span', { class: 'muted' }, ' → ') : null, el('span', { class: 'chip', title: h.by || '' }, h.state)])));
+    }
+
+    function select(sid) {
+      st.selected = sid;
+      drawDetail();
+      paint();
+      if (sid) setHash(view.id, sid);
+    }
+    function setFamily(f) {
+      st.family = f;
+      $$('.fam', root).forEach((c) => c.classList.toggle('on', c.dataset.family === (f || '')));
+      drawDetail();
+      drawSim();
+      paint();
+    }
+
+    const famChips = families.length ? [
+      el('button', { type: 'button', class: 'chip btn fam on', 'data-family': '', onclick: () => setFamily(null) }, tr('all')),
+      ...families.map((f) => el('button', { type: 'button', class: 'chip fam', 'data-family': f, onclick: () => setFamily(f) }, f))
+    ] : [];
+
+    root.append(el('div', { class: 'split wide' },
+      el('div', { class: 'card' }, el('h2', {}, view.title), view.description ? el('p', { class: 'muted' }, view.description) : null,
+        famChips.length ? el('div', { class: 'row-tools' }, el('span', { class: 'muted' }, tr('family') + ':'), famChips) : null,
+        wrap, el('p', { class: 'hint' }, tr('mapHint'))),
+      el('div', {}, detail, el('div', { style: 'height:14px' }), simBox)));
+
+    const first = (view.states.find((s) => s.initial) || view.states[0]).id;
+    simReset(first);
+    drawDetail();
+    paint();
+
+    return {
+      onShow: viewport.fit,
+      select: (sid) => { if (stateById.has(sid)) select(sid); },
+      setFamily, simReset, simTake, allowedFrom, layout: { layer, rows }, state: st
+    };
+  }
+
+  /* ===================================================================
+   * View: catalog (sortable, filterable, groupable table)
+   * =================================================================== */
+  function renderCatalogView(view, root) {
+    const cols = view.columns;
+    const rows = view.rows.map((r, i) => ({ id: rowId(r, i), data: r }));
+    const st = { q: '', filters: new Map(), sortKey: null, dir: 1, selected: null, collapsed: new Set() };
+    const detail = el('div', { class: 'card', 'aria-live': 'polite' });
+    const countEl = el('p', { class: 'hint', 'data-role': 'count' });
+    const tbody = el('tbody');
+    const headRow = el('tr');
+    const text = (r) => cols.map((c) => String(r.data[c.key] ?? '')).join(' · ');
+
+    cols.forEach((c) => headRow.append(el('th', { scope: 'col', 'data-col': c.key }, el('button', { type: 'button', 'data-act': 'sort', onclick: () => sortBy(c.key) }, c.label, ' ', el('span', { class: 'arrow' })))));
+
+    const chipsBox = el('div', { class: 'row-tools' });
+    for (const c of cols.filter((x) => x.filterable)) {
+      const values = [...new Set(rows.map((r) => String(r.data[c.key] ?? '')).filter(Boolean))].sort();
+      put(chipsBox, el('span', { class: 'muted' }, c.label + ':'), values.map((v) => el('button', { type: 'button', class: 'chip', 'data-col': c.key, 'data-value': v, onclick: () => {
+        if (st.filters.get(c.key) === v) st.filters.delete(c.key); else st.filters.set(c.key, v);
+        draw();
+      } }, v)));
+    }
+    const search = el('input', { type: 'search', class: 'grow', placeholder: tr('filterRows'), 'aria-label': tr('filterRows'), oninput: (e) => { st.q = e.target.value.toLowerCase(); draw(); } });
+
+    root.append(el('div', { class: 'split wide' },
+      el('div', { class: 'card' }, el('h2', {}, view.title), view.description ? el('p', { class: 'muted' }, view.description) : null,
+        el('div', { class: 'row-tools' }, search), chipsBox, countEl,
+        el('div', { class: 'tablewrap' }, el('table', {}, el('thead', {}, headRow), tbody))),
+      detail));
+
+    function sortBy(key) {
+      if (st.sortKey !== key) { st.sortKey = key; st.dir = 1; } else if (st.dir === 1) st.dir = -1; else { st.sortKey = null; st.dir = 1; }
+      draw();
+    }
+    function visibleRows() {
+      let list = rows.filter((r) => (!st.q || (r.id + ' ' + text(r)).toLowerCase().includes(st.q))
+        && [...st.filters].every(([k, v]) => String(r.data[k] ?? '') === v));
+      if (st.sortKey) {
+        const k = st.sortKey;
+        list = [...list].sort((a, b) => st.dir * String(a.data[k] ?? '').localeCompare(String(b.data[k] ?? ''), undefined, { numeric: true, sensitivity: 'base' }));
+      }
+      return list;
+    }
+    function rowEl(r) {
+      return el('tr', { 'data-key': keyOf(view.id, r.id), tabindex: 0, role: 'button', class: st.selected === r.id ? 'sel' : '', onclick: () => select(r.id),
+        onkeydown: (e) => { if (e.key === 'Enter') select(r.id); } },
+      cols.map((c) => el('td', { class: c.mono ? 'mono' : '' }, String(r.data[c.key] ?? ''))));
+    }
+    function draw() {
+      const list = visibleRows();
+      $$('th', headRow).forEach((th) => {
+        const active = th.dataset.col === st.sortKey;
+        th.setAttribute('aria-sort', active ? (st.dir === 1 ? 'ascending' : 'descending') : 'none');
+        $('.arrow', th).textContent = active ? (st.dir === 1 ? '▲' : '▼') : '';
+      });
+      $$('button.chip[data-col]', chipsBox).forEach((c) => c.classList.toggle('on', st.filters.get(c.dataset.col) === c.dataset.value));
+      countEl.textContent = tr('rows', { n: list.length, total: rows.length }) + (st.sortKey ? ' · ' + tr('sortedBy', { col: cols.find((c) => c.key === st.sortKey).label }) : '');
+      tbody.replaceChildren();
+      if (!list.length) return tbody.append(el('tr', {}, el('td', { colspan: cols.length, class: 'muted' }, tr('noRows'))));
+      if (!view.groupBy) return list.forEach((r) => tbody.append(rowEl(r)));
+      const groups = new Map();
+      list.forEach((r) => { const g = String(r.data[view.groupBy] ?? ''); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(r); });
+      for (const [g, members] of groups) {
+        const closed = st.collapsed.has(g);
+        tbody.append(el('tr', { class: 'groupbar', 'data-group': g, tabindex: 0, 'aria-expanded': String(!closed),
+          onclick: () => { if (closed) st.collapsed.delete(g); else st.collapsed.add(g); draw(); } },
+        el('td', { colspan: cols.length }, (closed ? '▸ ' : '▾ ') + g + ' (' + members.length + ')')));
+        if (!closed) members.forEach((r) => tbody.append(rowEl(r)));
+      }
+    }
+    function drawDetail() {
+      detail.replaceChildren();
+      const r = rows.find((x) => x.id === st.selected);
+      if (!r) return put(detail, el('h2', {}, tr('detail')), el('p', { class: 'muted' }, tr('pickItem')));
+      const extraKeys = Object.keys(r.data).filter((k) => k !== 'id' && k !== 'links' && !cols.some((c) => c.key === k));
+      const asText = [...cols.map((c) => c.label + ': ' + (r.data[c.key] ?? '')), ...extraKeys.map((k) => k + ': ' + r.data[k])].join('\n');
+      put(detail, el('h2', {}, String(r.data[cols[0].key] ?? r.id)),
+        el('dl', { class: 'kv' }, [...cols.map((c) => [c.label, r.data[c.key]]), ...extraKeys.map((k) => [k, r.data[k]])]
+          .filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => [el('dt', {}, k), el('dd', {}, String(v))])),
+        linkChips(r.data.links),
+        el('p', {}, el('button', { type: 'button', class: 'btn', 'data-act': 'copy-row', onclick: () => copyText(asText, tr('copied')) }, tr('copyRow')), ' ', copyLinkButton(view.id, r.id)));
+    }
+    function select(id) {
+      st.selected = id;
+      drawDetail();
+      draw();
+      if (id) setHash(view.id, id);
+    }
+    drawDetail();
+    draw();
+
+    return {
+      onShow() {},
+      select: (id) => { if (rows.some((r) => r.id === id)) { st.q = ''; search.value = ''; st.filters.clear(); st.collapsed.clear(); select(id); } },
+      state: st, sortBy, draw, visibleRows, search
+    };
+  }
+
+  /* ===================================================================
+   * View: metrics (bar charts)
+   * =================================================================== */
+  function renderMetricsView(view, root) {
+    const groupNames = [...new Set(view.series.flatMap((s) => s.items.map((i) => i.group)).filter(Boolean))];
+    const colorOf = (g) => PALETTE[Math.max(0, groupNames.indexOf(g)) % PALETTE.length];
+    // 'always' keeps 3897 as 3.897: the default Italian rule skips grouping for four digits, which looks inconsistent next to 18.189.
+    let numberFormat;
+    try { numberFormat = new Intl.NumberFormat(LANG === 'it' ? 'it-IT' : 'en-US', { useGrouping: 'always' }); } catch (e) { numberFormat = null; }
+    const fmt = (n) => (numberFormat ? numberFormat.format(n) : String(n));
+    const cards = new Map();
+
+    function seriesCard(s) {
+      const st = { sort: 'value', scale: 'linear' };
+      const barsBox = el('div', { 'data-role': 'bars' });
+      const sortBtn = el('button', { type: 'button', class: 'btn', 'data-act': 'sort', onclick: () => { st.sort = st.sort === 'value' ? 'name' : 'value'; draw(); } });
+      const scaleBtn = el('button', { type: 'button', class: 'btn', 'data-act': 'scale', onclick: () => { st.scale = st.scale === 'linear' ? 'sqrt' : 'linear'; draw(); } });
+      const card = el('div', { class: 'card flashable', 'data-key': keyOf(view.id, s.id) },
+        el('h2', {}, s.title), s.description ? el('p', { class: 'muted' }, s.description) : null,
+        el('div', { class: 'row-tools' }, sortBtn, scaleBtn, el('span', { class: 'muted', 'data-role': 'total' })), barsBox);
+      function draw() {
+        const items = [...s.items].sort(st.sort === 'value' ? (a, b) => b.value - a.value : (a, b) => a.label.localeCompare(b.label));
+        const scale = (v) => (st.scale === 'sqrt' ? Math.sqrt(Math.max(0, v)) : Math.max(0, v));
+        const max = Math.max(...items.map((i) => scale(i.value)), 1);
+        sortBtn.textContent = st.sort === 'value' ? tr('sortName') : tr('sortValue');
+        scaleBtn.textContent = st.scale === 'linear' ? tr('scaleSqrt') : tr('scaleLinear');
+        $('[data-role="total"]', card).textContent = tr('total') + ': ' + fmt(s.items.reduce((a, i) => a + i.value, 0)) + (s.unit ? ' ' + s.unit : '');
+        barsBox.replaceChildren(...items.map((i) => el('div', { class: 'barrow', 'data-label': i.label },
+          el('div', {}, i.label),
+          el('div', { class: 'barwrap' }, el('div', { class: 'bar', style: 'width:' + (scale(i.value) / max) * 100 + '%;background:' + colorOf(i.group) })),
+          el('div', { class: 'num' }, fmt(i.value)))));
+      }
+      draw();
+      cards.set(s.id, { card, draw, st, sortBtn, scaleBtn });
+      return card;
+    }
+
+    put(root, el('h2', {}, view.title), view.description ? el('p', { class: 'muted' }, view.description) : null,
+      groupNames.length ? el('p', {}, groupNames.map((g) => el('span', { class: 'chip' }, el('span', { class: 'swatch', style: 'background:' + colorOf(g) }), g))) : null,
+      el('div', { class: 'split' }, view.series.map(seriesCard)),
+      (view.callouts || []).map((c) => el('div', { class: 'callout' }, el('b', {}, c.title), el('p', {}, c.text))),
+      (view.tables || []).map((t) => el('div', { class: 'card' }, t.title ? el('h2', {}, t.title) : null,
+        el('div', { class: 'tablewrap' }, el('table', {}, el('thead', {}, el('tr', {}, t.columns.map((c) => el('th', { scope: 'col' }, c)))),
+          el('tbody', {}, t.rows.map((r) => el('tr', {}, r.map((c) => el('td', {}, String(c)))))))))));
+
+    return { onShow() {}, select() {}, cards };
+  }
+
+  /* ===================================================================
+   * View: notes (risks, open questions)
+   * =================================================================== */
+  function renderNotesView(view, root) {
+    const st = { severity: null, status: null };
+    const list = el('div', { 'data-role': 'notes' });
+    const sevs = SEV_ORDER.filter((s) => view.items.some((i) => i.severity === s));
+    const stats = ['verified', 'unverified'].filter((s) => view.items.some((i) => i.status === s));
+    const chip = (kind, value, label) => el('button', { type: 'button', class: cls('chip', kind === 'severity' && value && 'sev-' + value), 'data-kind': kind, 'data-value': value || '',
+      onclick: () => { st[kind] = value; draw(); } }, label);
+    const filters = el('div', { class: 'row-tools' },
+      sevs.length ? [el('span', { class: 'muted' }, tr('severity') + ':'), chip('severity', null, tr('all')), sevs.map((s) => chip('severity', s, tr(s) + ' (' + view.items.filter((i) => i.severity === s).length + ')'))] : null,
+      stats.length ? [el('span', { class: 'muted' }, tr('statusLabel') + ':'), chip('status', null, tr('all')), stats.map((s) => chip('status', s, tr(s)))] : null,
+      el('button', { type: 'button', class: 'btn', 'data-act': 'expand', onclick: () => $$('details', list).forEach((d) => { d.open = true; }) }, tr('expandAll')),
+      el('button', { type: 'button', class: 'btn', 'data-act': 'collapse', onclick: () => $$('details', list).forEach((d) => { d.open = false; }) }, tr('collapseAll')));
+    root.append(el('div', { class: 'card' }, el('h2', {}, view.title), view.description ? el('p', { class: 'muted' }, view.description) : null, filters, list));
+
+    function draw() {
+      $$('button.chip', filters).forEach((c) => c.classList.toggle('on', (st[c.dataset.kind] || '') === c.dataset.value));
+      const items = view.items.filter((i) => (!st.severity || i.severity === st.severity) && (!st.status || i.status === st.status));
+      list.replaceChildren(...items.map((i) => el('details', { class: 'note flashable', 'data-key': keyOf(view.id, i.id), 'data-id': i.id },
+        el('summary', {}, i.severity ? el('span', { class: 'chip sev-' + i.severity }, tr(i.severity)) : null,
+          i.status ? el('span', { class: cls('chip', i.status === 'unverified' && 'unverified') }, tr(i.status)) : null, ' ', i.title),
+        el('p', {}, i.text), linkChips(i.links), el('p', {}, copyLinkButton(view.id, i.id)))));
+    }
+    draw();
+
+    return {
+      onShow() {},
+      select(id) {
+        const item = view.items.find((i) => i.id === id);
+        if (!item) return;
+        if ((st.severity && item.severity !== st.severity) || (st.status && item.status !== st.status)) { st.severity = null; st.status = null; draw(); }
+        const node = $('details[data-id="' + id.replace(/"/g, '\\"') + '"]', list);
+        if (node) node.open = true;
+        setHash(view.id, id);
+      },
+      state: st, draw
+    };
+  }
+  const SEV_ORDER = ['high', 'med', 'low'];
+
+  /* ===================================================================
+   * Router: tabs, deep links (#view/item), history
+   * =================================================================== */
+  const RENDERERS = { map: renderMapView, flow: renderFlowView, states: renderStatesView, catalog: renderCatalogView, metrics: renderMetricsView, notes: renderNotesView };
+  const controllers = new Map();
+  const sections = new Map();
+  const tabButtons = new Map();
+  let currentView = null;
+
+  const hashFor = (view, item) => '#' + encodeURIComponent(view) + (item ? '/' + encodeURIComponent(item) : '');
+  function parseHash() {
+    let raw = location.hash.replace(/^#/, '');
+    try { raw = decodeURIComponent(raw); } catch (e) { /* keep the raw text */ }
+    if (!raw) return null;
+    const slash = raw.indexOf('/');
+    return slash < 0 ? { view: raw, item: null } : { view: raw.slice(0, slash), item: raw.slice(slash + 1) };
+  }
+  /** Rewrites the URL without firing hashchange; `push` adds a history entry (used for explicit navigation). */
+  function setHash(view, item, push) {
+    const h = hashFor(view, item);
+    if (location.hash === h) return;
+    try { history[push ? 'pushState' : 'replaceState'](null, '', h); } catch (e) { location.hash = h; }
+  }
+
+  function show(viewId, itemId, opts) {
+    if (!controllers.has(viewId)) viewId = DATA.views[0].id;
+    currentView = viewId;
+    for (const [id, sec] of sections) sec.classList.toggle('active', id === viewId);
+    for (const [id, btn] of tabButtons) btn.setAttribute('aria-selected', String(id === viewId));
+    store.set('view', viewId);
+    const ctl = controllers.get(viewId);
+    ctl.onShow();
+    if (itemId) {
+      ctl.select(itemId);
+      if (opts && opts.flash) flash(keyOf(viewId, itemId));
+    }
+  }
+  function navigate(viewId, itemId) {
+    setHash(viewId, itemId || null, true);
+    show(viewId, itemId, { flash: true });
+  }
+  function applyHash() {
+    const h = parseHash();
+    if (h) show(h.view, h.item, { flash: !!h.item });
+    else show(store.get('view') || DATA.views[0].id);
+  }
+
+  /* ===================================================================
+   * Command palette
+   * =================================================================== */
+  const pal = { open: false, results: [], active: 0, returnFocus: null };
+  const palInput = el('input', { type: 'search', 'aria-label': tr('search'), placeholder: tr('searchPlaceholder'), autocomplete: 'off', oninput: () => palSearch() });
+  const palList = el('ul', { role: 'listbox', 'aria-label': tr('search') });
+  const palEl = el('div', { class: 'overlay', hidden: true, role: 'dialog', 'aria-modal': 'true', 'aria-label': tr('search'),
+    onclick: (e) => { if (e.target === palEl) closePalette(); } }, el('div', { class: 'pal' }, palInput, palList));
+
+  function isSubsequence(needle, hay) {
+    let i = 0;
+    for (const ch of hay) if (ch === needle[i]) i++;
+    return i === needle.length;
+  }
+  function score(entry, tokens) {
+    const label = entry.label.toLowerCase(), text = entry.text.toLowerCase();
+    let total = 0;
+    for (const tok of tokens) {
+      if (label.startsWith(tok)) total += 100;
+      else if (label.includes(tok)) total += 70;
+      else if (text.includes(tok)) total += 40;
+      else if (isSubsequence(tok, label)) total += 15;
+      else return 0;
+    }
+    return total;
+  }
+  function palSearch() {
+    const tokens = palInput.value.toLowerCase().split(/\s+/).filter(Boolean);
+    pal.results = tokens.length
+      ? INDEX.map((e) => ({ e, s: score(e, tokens) })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s).slice(0, 30).map((x) => x.e)
+      : INDEX.slice(0, 30);
+    pal.active = 0;
+    palDraw();
+  }
+  function palDraw() {
+    palList.replaceChildren(...(pal.results.length
+      ? pal.results.map((e, i) => el('li', { role: 'option', 'aria-selected': String(i === pal.active), onclick: () => palChoose(i), onpointermove: () => { if (pal.active !== i) { pal.active = i; palMark(); } } },
+        el('span', {}, e.label), el('span', { class: 'kind' }, e.kind)))
+      : [el('li', { class: 'muted' }, tr('noResults'))]));
+    const active = palList.children[pal.active];
+    if (active && active.scrollIntoView) active.scrollIntoView({ block: 'nearest' });
+  }
+  function palMark() { Array.from(palList.children).forEach((li, i) => li.setAttribute('aria-selected', String(i === pal.active))); }
+  function palChoose(i) {
+    const e = pal.results[i];
+    if (!e) return;
+    closePalette();
+    navigate(e.view, e.id);
+  }
+  function openPalette() {
+    pal.open = true;
+    pal.returnFocus = document.activeElement;
+    palEl.hidden = false;
+    palInput.value = '';
+    palSearch();
+    palInput.focus();
+  }
+  function closePalette() {
+    if (!pal.open) return;
+    pal.open = false;
+    palEl.hidden = true;
+    if (pal.returnFocus && pal.returnFocus.focus) pal.returnFocus.focus();
+  }
+  palInput.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); pal.active = Math.min(pal.results.length - 1, pal.active + 1); palDraw(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); pal.active = Math.max(0, pal.active - 1); palDraw(); }
+    else if (e.key === 'Enter') { e.preventDefault(); palChoose(pal.active); }
+    else if (e.key === 'Escape') { e.preventDefault(); closePalette(); }
+  });
+
+  /* ===================================================================
+   * Boot
+   * =================================================================== */
+  function applyTheme(theme) {
+    if (theme) document.documentElement.setAttribute('data-theme', theme); else document.documentElement.removeAttribute('data-theme');
+  }
+  function boot() {
+    document.documentElement.lang = LANG;
+    document.title = DATA.meta.title;
+    $('#app-title').textContent = DATA.meta.title;
+    $('#app-sub').textContent = [DATA.meta.subtitle, DATA.meta.generated && tr('generated') + ' ' + DATA.meta.generated, DATA.meta.source && tr('source') + ': ' + DATA.meta.source].filter(Boolean).join(' · ');
+    applyTheme(store.get('theme'));
+    $('#app-tools').append(
+      el('button', { type: 'button', class: 'btn', id: 'open-palette', 'aria-label': tr('search'), onclick: openPalette }, tr('search'), el('kbd', {}, tr('kbdHint'))),
+      el('button', { type: 'button', class: 'btn', id: 'toggle-theme', onclick: () => {
+        const cur = document.documentElement.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const next = cur === 'dark' ? 'light' : 'dark';
+        applyTheme(next);
+        store.set('theme', next);
+      } }, tr('theme')));
+    document.body.append(palEl);
+
+    buildIndex();
+    for (const view of DATA.views) {
+      const btn = el('button', { type: 'button', role: 'tab', 'data-view': view.id, 'aria-selected': 'false', onclick: () => navigate(view.id) }, view.title);
+      $('#tabs').append(btn);
+      tabButtons.set(view.id, btn);
+      const sec = el('section', { class: 'view', id: 'view-' + view.id, 'data-view': view.id, role: 'tabpanel' });
+      $('#views').append(sec);
+      sections.set(view.id, sec);
+      controllers.set(view.id, RENDERERS[view.type](view, sec));
+    }
+
+    document.addEventListener('keydown', (e) => {
+      const typing = /^(input|textarea|select)$/i.test(e.target.tagName) || e.target.isContentEditable;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); if (pal.open) closePalette(); else openPalette(); }
+      else if (e.key === '/' && !typing && !pal.open) { e.preventDefault(); openPalette(); }
+      else if (e.key === 'Escape') closePalette();
+      else if (!typing && !pal.open && currentView && DATA.views.find((v) => v.id === currentView).type === 'flow') {
+        if (e.key === 'ArrowRight') controllers.get(currentView).step(1);
+        else if (e.key === 'ArrowLeft') controllers.get(currentView).step(-1);
+      }
+    });
+    window.addEventListener('hashchange', applyHash);
+    window.addEventListener('popstate', applyHash);
+    applyHash();
+  }
+
+  /* ===================================================================
+   * Self-test (?selftest=1): drives every view through its public controls, reports PASS/FAIL
+   * =================================================================== */
+  function selfTest() {
+    const failures = [];
+    const uncaught = [];
+    window.addEventListener('error', (e) => uncaught.push(e.message));
+    const check = (cond, message) => { if (!cond) failures.push(message); };
+    const attempt = (name, fn) => { try { fn(); } catch (e) { failures.push(name + ' threw: ' + (e && e.message ? e.message : e)); } };
+    const click = (node) => node.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    const typeInto = (input, value) => { input.value = value; input.dispatchEvent(new Event('input', { bubbles: true })); };
+    const active = (id) => sections.get(id);
+    // Rendering bugs such as arrays printed as [object ...] only show up in the text, so every interaction is followed by this check.
+    const BAD_TEXT = /\[object |\bundefined\b|\bNaN\b/;
+    const sane = (node, where) => check(!BAD_TEXT.test(node.textContent), where + ': page text contains ' + ((node.textContent.match(BAD_TEXT) || [''])[0]));
+
+    for (const view of DATA.views) {
+      attempt('open view ' + view.id, () => {
+        navigate(view.id);
+        check(active(view.id).classList.contains('active'), view.id + ': section not active');
+        check(active(view.id).children.length > 0, view.id + ': section is empty');
+        sane(active(view.id), view.id);
+        check(tabButtons.get(view.id).getAttribute('aria-selected') === 'true', view.id + ': tab not selected');
+      });
+    }
+
+    for (const view of DATA.views.filter((v) => v.type === 'map')) {
+      const ctl = controllers.get(view.id), sec = active(view.id);
+      attempt('map select ' + view.id, () => {
+        navigate(view.id);
+        for (const n of view.nodes) {
+          click(ctl.widget.nodeEls.get(n.id));
+          check($$('.node.sel', sec).length === 1, view.id + '/' + n.id + ': expected exactly one selected node');
+          check($('h2', $$('.card', sec).pop()).textContent.includes(n.title), view.id + '/' + n.id + ': detail title mismatch');
+          sane(sec, view.id + '/' + n.id);
+        }
+      });
+      attempt('map trace ' + view.id, () => {
+        if (!view.edges || !view.edges.length) return;
+        click($('[data-act="trace"]', sec));
+        check(ctl.widget.root && $('[data-trace="pick-from"]', sec), view.id + ': trace prompt missing');
+        const e = view.edges[0];
+        click(ctl.widget.nodeEls.get(e.from));
+        click(ctl.widget.nodeEls.get(e.to));
+        const result = $('[data-trace="result"]', sec);
+        check(result && $$('li', result).length >= 2, view.id + ': trace result missing or too short');
+        check($$('.node.path', sec).length >= 2, view.id + ': path nodes not highlighted');
+        click($('[data-act="trace"]', sec));
+        check($$('.node.path', sec).length === 0, view.id + ': path not cleared when tracing stops');
+      });
+      attempt('map groups ' + view.id, () => {
+        const chip = $('button[data-group]', sec);
+        if (!chip) return;
+        const first = view.nodes.find((n) => n.group === chip.dataset.group);
+        click(chip);
+        check(first && ctl.widget.nodeEls.get(first.id).style.display === 'none', view.id + ': group not hidden');
+        click(chip);
+        check(first && ctl.widget.nodeEls.get(first.id).style.display === '', view.id + ': group not shown again');
+      });
+      attempt('map zoom ' + view.id, () => {
+        const before = ctl.widget.viewport.viewBox();
+        click($('[data-act="zoom-in"]', sec));
+        click($('[data-act="fit"]', sec));
+        check(typeof ctl.widget.viewport.viewBox() === 'string', view.id + ': viewBox missing');
+        check(before !== null, view.id + ': viewBox was never set');
+      });
+    }
+
+    for (const view of DATA.views.filter((v) => v.type === 'flow')) {
+      const ctl = controllers.get(view.id), sec = active(view.id);
+      attempt('flow ' + view.id, () => {
+        navigate(view.id);
+        view.steps.forEach((s, i) => {
+          click($$('.stepbar button', sec)[i]);
+          check($('[data-role="step-title"]', sec).textContent.includes(s.title), view.id + '/' + s.id + ': step title mismatch');
+          sane(sec, view.id + '/' + s.id);
+          if (ctl.widget) {
+            const lit = new Set(s.edgeIds || []);
+            check($$('.edge-g.hl', ctl.widget.root).length === lit.size, view.id + '/' + s.id + ': highlighted edge count differs from edgeIds');
+          }
+        });
+        click($('[data-act="prev"]', sec));
+        click($('[data-act="next"]', sec));
+        click($('[data-act="play"]', sec));
+        check(ctl.isPlaying(), view.id + ': autoplay did not start');
+        click($('[data-act="play"]', sec));
+        check(!ctl.isPlaying(), view.id + ': autoplay did not stop');
+      });
+    }
+
+    for (const view of DATA.views.filter((v) => v.type === 'states')) {
+      const ctl = controllers.get(view.id), sec = active(view.id);
+      attempt('states ' + view.id, () => {
+        navigate(view.id);
+        check(ctl.layout.layer.size === view.states.length, view.id + ': layout missed some states');
+        for (const s of view.states) {
+          click($('.st[data-id="' + s.id.replace(/"/g, '\\"') + '"]', sec));
+          check($$('.st.sel', sec).length === 1, view.id + '/' + s.id + ': expected one selected state');
+          sane(sec, view.id + '/' + s.id);
+        }
+        for (const chip of $$('.fam', sec)) click(chip);
+        if ($('.fam', sec)) click($('.fam', sec)); // back to "all"
+        click($('[data-act="sim-reset"]', sec));
+        const start = $('[data-role="sim-current"]', sec).textContent;
+        const next = $('[data-act="sim-take"]', sec);
+        if (next) {
+          click(next);
+          check($$('[data-role="sim-trail"] .chip', sec).length === 2, view.id + ': simulator trail did not grow');
+          sane(sec, view.id + ' simulator');
+          click($('[data-act="sim-reset"]', sec));
+          check($('[data-role="sim-current"]', sec).textContent === start, view.id + ': simulator reset failed');
+        }
+      });
+    }
+
+    for (const view of DATA.views.filter((v) => v.type === 'catalog')) {
+      const ctl = controllers.get(view.id), sec = active(view.id);
+      attempt('catalog ' + view.id, () => {
+        navigate(view.id);
+        const total = view.rows.length;
+        const sortBtn = $('[data-act="sort"]', sec);
+        click(sortBtn);
+        check($('th[aria-sort="ascending"]', sec), view.id + ': ascending sort not applied');
+        click(sortBtn);
+        check($('th[aria-sort="descending"]', sec), view.id + ': descending sort not applied');
+        click(sortBtn);
+        const probe = String(view.rows[0][view.columns[0].key]).slice(0, 4).toLowerCase();
+        typeInto(ctl.search, probe);
+        const filtered = ctl.visibleRows().length;
+        check(filtered >= 1 && filtered <= total, view.id + ': search returned an impossible count');
+        typeInto(ctl.search, '');
+        const chip = $('button.chip[data-col]', sec);
+        if (chip) {
+          click(chip);
+          check(ctl.visibleRows().length <= total && chip.classList.contains('on'), view.id + ': filter chip did not apply');
+          click(chip);
+        }
+        const row = $('tbody tr[data-key]', sec);
+        click(row);
+        check($('[data-act="copy-row"]', sec), view.id + ': row detail missing');
+        sane(sec, view.id + ' catalog');
+      });
+    }
+
+    for (const view of DATA.views.filter((v) => v.type === 'metrics')) {
+      const sec = active(view.id);
+      attempt('metrics ' + view.id, () => {
+        navigate(view.id);
+        check($$('.barrow', sec).length >= 1, view.id + ': no bars rendered');
+        click($('[data-act="scale"]', sec));
+        click($('[data-act="sort"]', sec));
+        check($$('.barrow', sec).length >= 1, view.id + ': bars vanished after toggles');
+        sane(sec, view.id);
+      });
+    }
+
+    for (const view of DATA.views.filter((v) => v.type === 'notes')) {
+      const sec = active(view.id);
+      attempt('notes ' + view.id, () => {
+        navigate(view.id);
+        click($('[data-act="expand"]', sec));
+        check($$('details[open]', sec).length === $$('details', sec).length, view.id + ': expand all failed');
+        sane(sec, view.id + ' notes');
+        click($('[data-act="collapse"]', sec));
+        check($$('details[open]', sec).length === 0, view.id + ': collapse all failed');
+        const chip = $('button.chip[data-kind][data-value]:not([data-value=""])', sec);
+        if (chip) { click(chip); check($$('details', sec).length >= 1, view.id + ': filter hid every note'); }
+        const all = $('button.chip[data-value=""]', sec);
+        if (all) click(all);
+      });
+    }
+
+    attempt('palette', () => {
+      const entry = INDEX[0];
+      openPalette();
+      check(!palEl.hidden, 'palette did not open');
+      typeInto(palInput, entry.label);
+      check(pal.results.length >= 1 && pal.results[0].label.length > 0, 'palette returned no results for an indexed label');
+      palInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      palInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+      const target = pal.results[0];
+      palInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      check(palEl.hidden, 'palette did not close on Enter');
+      check(currentView === target.view, 'palette Enter did not navigate to the result view');
+    });
+
+    attempt('deep links', () => {
+      const sample = INDEX.filter((e, i) => i % Math.max(1, Math.floor(INDEX.length / 12)) === 0).slice(0, 12);
+      for (const e of sample) {
+        history.replaceState(null, '', hashFor(e.view, e.id));
+        applyHash();
+        check(currentView === e.view, 'deep link ' + e.key + ' opened the wrong view');
+        check($$('[data-key]').some((n) => n.dataset.key === e.key), 'deep link ' + e.key + ' has no element in the page');
+      }
+    });
+
+    check(uncaught.length === 0, 'uncaught errors: ' + uncaught.join('; '));
+    const result = failures.length ? 'FAIL: ' + failures.join(' | ') : 'PASS';
+    $('#selftest-result').textContent = result;
+    document.title = 'selftest:' + (failures.length ? 'FAIL' : 'PASS');
+    history.replaceState(null, '', location.pathname + location.search);
+    return result;
+  }
+
+  // The only global: a namespace for debugging and the self-test.
+  window.Explorer = { data: DATA, navigate, applyHash, openPalette, closePalette, selfTest };
+
+  try {
+    boot();
+    if (/(^|[?&])selftest=1(&|$)/.test(location.search)) selfTest();
+  } catch (err) {
+    document.title = 'selftest:FAIL';
+    $('#selftest-result').textContent = 'FAIL: boot error: ' + (err && err.stack ? err.stack : err);
+    throw err;
+  }
+})();
+</script>
+</body>
+</html>
